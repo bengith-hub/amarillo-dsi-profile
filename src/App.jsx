@@ -857,60 +857,37 @@ export default function App() {
     document.head.appendChild(styleEl);
 
     try {
-      // Small delay to let styles apply
       await new Promise(r => setTimeout(r, 100));
 
-      // Step 1: Capture full element to one big canvas
-      const html2canvas = (await import("html2canvas")).default;
-      const fullCanvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        width: 880,
-        windowWidth: 880,
-      });
+      // Use html2pdf.js — it respects CSS page-break rules
+      const html2pdf = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: [16, 10, 14, 10],
+        filename: `DSI-Profile_${name}.pdf`,
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 880 },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
 
-      // Step 2: Setup PDF dimensions
-      const { jsPDF } = await import("jspdf");
-      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const pw = pdf.internal.pageSize.getWidth();
-      const ph = pdf.internal.pageSize.getHeight();
-      const mTop = 16, mRight = 10, mBottom = 14, mLeft = 10;
-      const contentW = pw - mLeft - mRight;
-      const contentH = ph - mTop - mBottom;
+      const worker = html2pdf().set(opt).from(el);
+      await worker.toPdf().get("pdf").then((pdf) => {
+        const pw = pdf.internal.pageSize.getWidth();
+        const ph = pdf.internal.pageSize.getHeight();
+        const totalPages = pdf.internal.getNumberOfPages();
 
-      const pxPerMm = fullCanvas.width / contentW;
-      const sliceHpx = Math.floor(contentH * pxPerMm);
-      const totalPages = Math.ceil(fullCanvas.height / sliceHpx);
+        // Remove last page if it's essentially empty (just whitespace from padding)
+        if (totalPages > 1) {
+          // Always keep — we can't easily detect empty pages in jsPDF
+        }
 
-      // Step 3: Slice canvas into page-sized chunks on white pages
-      for (let i = 0; i < totalPages; i++) {
-        if (i > 0) pdf.addPage();
-        // White page background
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, pw, ph, "F");
-
-        const srcY = i * sliceHpx;
-        const srcH = Math.min(sliceHpx, fullCanvas.height - srcY);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = fullCanvas.width;
-        sliceCanvas.height = srcH;
-        const ctx = sliceCanvas.getContext("2d");
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, sliceCanvas.width, srcH);
-        ctx.drawImage(fullCanvas, 0, srcY, fullCanvas.width, srcH, 0, 0, fullCanvas.width, srcH);
-        const sliceData = sliceCanvas.toDataURL("image/png");
-
-        const sliceHmm = srcH / pxPerMm;
-        pdf.addImage(sliceData, "PNG", mLeft, mTop, contentW, sliceHmm);
-
-        // Page number (light gray on white)
-        pdf.setFontSize(8);
-        pdf.setTextColor(190, 190, 190);
-        pdf.text(`${i + 1} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
-      }
-      pdf.save(`DSI-Profile_${name}.pdf`);
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          pdf.setFontSize(8);
+          pdf.setTextColor(190, 190, 190);
+          pdf.text(`${i} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
+        }
+      }).save();
     } catch (err) {
       console.error("PDF generation error:", err);
     }
@@ -1170,7 +1147,7 @@ export default function App() {
               </p>
             </div>
 
-            <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
+            <div data-section="profile" style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
               <h2 data-profile-title style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
               <div data-score-badge style={{ display: "inline-block", marginBottom: 16, padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                 Score global : {analysis.avg.toFixed(2)} / 4.00
@@ -1193,7 +1170,7 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ ...box, padding: 32, marginBottom: 40 }}>
+            <div data-section="radar" style={{ ...box, padding: 32, marginBottom: 40 }}>
               <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 24, textAlign: "center" }}>Profil Radar — 12 Dimensions</h3>
               <RadarChart scores={scores} />
             </div>

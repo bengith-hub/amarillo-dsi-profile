@@ -25,11 +25,11 @@ input {
 }
 
 /* ========================================
-   PDF EXPORT MODE — White theme overrides
+   PDF EXPORT MODE — White theme layout
    ======================================== */
 
 .pdf-mode {
-  padding: 8px 0 16px !important;
+  padding: 0 !important;
 }
 
 .pdf-mode,
@@ -39,7 +39,7 @@ input {
   print-color-adjust: exact !important;
 }
 
-/* Layout: stack sections vertically for PDF */
+/* Stack pillars and synthesis vertically */
 .pdf-mode [data-section="pillars"] {
   flex-direction: column !important;
 }
@@ -56,8 +56,28 @@ input {
   flex: 1 1 100% !important;
 }
 
+/* Prevent page breaks inside sections */
 .pdf-mode [data-section="pillar-detail"],
-.pdf-mode [data-section="synthesis"] > div {
+.pdf-mode [data-section="synthesis"] > div,
+.pdf-mode [data-section="pillars"] > div,
+.pdf-mode [data-section="footer"] {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
+}
+
+/* Radar chart: never split across pages */
+.pdf-mode [data-section="radar"] {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+/* Profile summary box: keep together */
+.pdf-mode [data-section="profile"] {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+/* Force page break before pillars section for cleaner layout */
+.pdf-mode [data-section="pillars"] {
+  page-break-before: auto;
 }

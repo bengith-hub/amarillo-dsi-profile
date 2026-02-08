@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import amarilloLogoWhite from "./assets/amarillo-logo-white.png";
+import amarilloLogoDark from "./assets/amarillo-logo-dark.png";
 
 // ============================================================
 // AMARILLO DSI PROFILE™ v3
@@ -566,11 +567,11 @@ function RadarChart({ scores, size = 440 }) {
   const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: c + (v / 4) * r * Math.cos(a), y: c + (v / 4) * r * Math.sin(a) }; };
   return (
     <svg viewBox={`0 0 ${vw} ${vw}`} style={{ width: "100%", maxWidth: vw, display: "block", margin: "0 auto" }}>
-      {[1,2,3,4].map(l => <polygon key={l} points={DIMENSIONS.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />)}
-      {DIMENSIONS.map((d,i) => { const p=pt(i,4); return <line key={d.id} x1={c} y1={c} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />; })}
-      <polygon points={DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#FECC02" strokeWidth="2.5" />
-      {DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return <circle key={d.id} cx={p.x} cy={p.y} r="5" fill={d.color} stroke="#fff" strokeWidth="1.5" />; })}
-      {DIMENSIONS.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="11" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
+      {[1,2,3,4].map(l => <polygon key={l} data-radar="grid" points={DIMENSIONS.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />)}
+      {DIMENSIONS.map((d,i) => { const p=pt(i,4); return <line key={d.id} data-radar="radial" x1={c} y1={c} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />; })}
+      <polygon data-radar="area" points={DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#FECC02" strokeWidth="2.5" />
+      {DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return <circle key={d.id} data-radar="dot" cx={p.x} cy={p.y} r="5" fill={d.color} stroke="#fff" strokeWidth="1.5" />; })}
+      {DIMENSIONS.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} data-radar="label" x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="11" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
     </svg>
   );
 }
@@ -579,10 +580,10 @@ function ScoreBar({ dimension, score }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ color: "#d0d0d0", fontSize: 13 }}>{dimension.icon} {dimension.name}</span>
-        <span style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{score.toFixed(2)}/4</span>
+        <span data-dim-label style={{ color: "#d0d0d0", fontSize: 13 }}>{dimension.icon} {dimension.name}</span>
+        <span data-score-value style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{score.toFixed(2)}/4</span>
       </div>
-      <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>
+      <div data-bar-bg style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>
         <div style={{ height: "100%", borderRadius: 4, width: `${(score/4)*100}%`, background: `linear-gradient(90deg, ${dimension.color}, ${dimension.color}cc)`, transition: "width 1s ease" }} />
       </div>
     </div>
@@ -763,18 +764,107 @@ export default function App() {
     if (!resultsRef.current) return;
     const el = resultsRef.current;
     const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
+
+    // --- Prepare: add pdf-mode class, hide interactive elements ---
     el.classList.add("pdf-mode");
     const hideEls = el.querySelectorAll("[data-pdf-hide], [data-pdf-hide-btns]");
     hideEls.forEach(e => e.style.display = "none");
     const footer = el.querySelector("[data-section='footer']");
     if (footer) footer.style.borderTop = "none";
 
+    // --- Swap logos to dark version ---
+    const logos = el.querySelectorAll("img[data-logo]");
+    const originalSrcs = [];
+    logos.forEach(img => { originalSrcs.push(img.src); img.src = amarilloLogoDark; });
+
+    // --- Inject light-theme CSS overrides ---
+    const lightCSS = `
+      [data-pdf-container] { background: #ffffff !important; }
+      [data-pdf-container] * { color: #333 !important; }
+      [data-pdf-container] h1, [data-pdf-container] h2, [data-pdf-container] h3,
+      [data-pdf-container] strong, [data-pdf-container] b {
+        color: #1a1a1a !important;
+      }
+      [data-pdf-container] [data-section="footer"] * { color: #999 !important; }
+      [data-pdf-container] [data-section="footer"] img { opacity: 0.7 !important; }
+
+      /* Boxes: invert semi-transparent backgrounds */
+      [data-pdf-container] [style*="rgba(255,255,255,0.0"] { background: rgba(0,0,0,0.02) !important; }
+      [data-pdf-container] [style*="rgba(255,255,255,0.06)"] { background: rgba(0,0,0,0.04) !important; }
+      [data-pdf-container] [style*="rgba(254,204,2,0.0"] { background: rgba(254,204,2,0.06) !important; }
+      [data-pdf-container] [style*="rgba(82,183,136,0.0"] { background: rgba(82,183,136,0.06) !important; }
+      [data-pdf-container] [style*="rgba(58,91,160,0.0"] { background: rgba(58,91,160,0.06) !important; }
+
+      /* Borders */
+      [data-pdf-container] [style*="rgba(255,255,255"] { border-color: rgba(0,0,0,0.08) !important; }
+      [data-pdf-container] [style*="rgba(254,204,2,0.12)"] { border-color: rgba(254,204,2,0.25) !important; }
+      [data-pdf-container] [style*="rgba(82,183,136,0.15)"] { border-color: rgba(82,183,136,0.25) !important; }
+      [data-pdf-container] [style*="rgba(58,91,160,0.15)"] { border-color: rgba(58,91,160,0.25) !important; }
+
+      /* Profile title: yellow badge with dark text */
+      [data-pdf-container] [data-profile-title] {
+        color: #1a1a1a !important;
+        background: #FECC02 !important;
+        padding: 4px 12px !important;
+        border-radius: 2px !important;
+        display: inline-block !important;
+      }
+
+      /* Score badge: dark bg + yellow text (keep) */
+      [data-pdf-container] [data-score-badge] {
+        background: #1a1a1a !important;
+        color: #FECC02 !important;
+      }
+
+      /* Section headers with yellow color → dark */
+      [data-pdf-container] [data-section-header="yellow"] { color: #8B7000 !important; }
+      [data-pdf-container] [data-section-header="green"] { color: #2D6A4F !important; }
+      [data-pdf-container] [data-section-header="blue"] { color: #3A5BA0 !important; }
+
+      /* Score values: keep pillar colors (they work on white) */
+      [data-pdf-container] [data-score-value] { color: inherit !important; }
+
+      /* Score bar background: light gray */
+      [data-pdf-container] [data-bar-bg] { background: rgba(0,0,0,0.06) !important; }
+
+      /* Radar chart */
+      [data-pdf-container] [data-radar="grid"] { stroke: rgba(0,0,0,0.1) !important; }
+      [data-pdf-container] [data-radar="radial"] { stroke: rgba(0,0,0,0.06) !important; }
+      [data-pdf-container] [data-radar="area"] {
+        fill: rgba(254,204,2,0.12) !important;
+        stroke: #C9A200 !important;
+      }
+      [data-pdf-container] [data-radar="dot"] { stroke: #333 !important; }
+      [data-pdf-container] [data-radar="label"] { fill: #555 !important; }
+
+      /* ScoreBar dimension labels */
+      [data-pdf-container] [data-dim-label] { color: #333 !important; }
+
+      /* Pillar score number */
+      [data-pdf-container] [data-pillar-score] { color: #1a1a1a !important; }
+      [data-pdf-container] [data-pillar-unit] { color: #999 !important; }
+
+      /* Synthesis scores */
+      [data-pdf-container] [data-synth-score="green"] { color: #2D6A4F !important; }
+      [data-pdf-container] [data-synth-score="yellow"] { color: #8B7000 !important; }
+
+      /* DSI Profile footer text */
+      [data-pdf-container] [data-dsi-label] { color: #C9A200 !important; }
+    `;
+    const styleEl = document.createElement("style");
+    styleEl.id = "pdf-light-theme";
+    styleEl.textContent = lightCSS;
+    document.head.appendChild(styleEl);
+
     try {
+      // Small delay to let styles apply
+      await new Promise(r => setTimeout(r, 100));
+
       // Step 1: Capture full element to one big canvas
       const html2canvas = (await import("html2canvas")).default;
       const fullCanvas = await html2canvas(el, {
         scale: 2,
-        backgroundColor: "#0a0b0e",
+        backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
         width: 880,
@@ -784,44 +874,40 @@ export default function App() {
       // Step 2: Setup PDF dimensions
       const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const pw = pdf.internal.pageSize.getWidth();   // 210mm
-      const ph = pdf.internal.pageSize.getHeight();   // 297mm
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
       const mTop = 16, mRight = 10, mBottom = 14, mLeft = 10;
       const contentW = pw - mLeft - mRight;
       const contentH = ph - mTop - mBottom;
 
-      // Pixels per mm based on content area mapping
       const pxPerMm = fullCanvas.width / contentW;
       const sliceHpx = Math.floor(contentH * pxPerMm);
       const totalPages = Math.ceil(fullCanvas.height / sliceHpx);
 
-      // Step 3: Slice the canvas into page-sized chunks and place each on a dark page
+      // Step 3: Slice canvas into page-sized chunks on white pages
       for (let i = 0; i < totalPages; i++) {
         if (i > 0) pdf.addPage();
-        // Paint full page dark background
-        pdf.setFillColor(10, 11, 14);
+        // White page background
+        pdf.setFillColor(255, 255, 255);
         pdf.rect(0, 0, pw, ph, "F");
 
-        // Slice canvas for this page
         const srcY = i * sliceHpx;
         const srcH = Math.min(sliceHpx, fullCanvas.height - srcY);
         const sliceCanvas = document.createElement("canvas");
         sliceCanvas.width = fullCanvas.width;
         sliceCanvas.height = srcH;
         const ctx = sliceCanvas.getContext("2d");
-        // Fill with dark bg first (in case of rounding gaps)
-        ctx.fillStyle = "#0a0b0e";
+        ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, sliceCanvas.width, srcH);
         ctx.drawImage(fullCanvas, 0, srcY, fullCanvas.width, srcH, 0, 0, fullCanvas.width, srcH);
         const sliceData = sliceCanvas.toDataURL("image/png");
 
-        // Place slice in content area
         const sliceHmm = srcH / pxPerMm;
         pdf.addImage(sliceData, "PNG", mLeft, mTop, contentW, sliceHmm);
 
-        // Page number
+        // Page number (light gray on white)
         pdf.setFontSize(8);
-        pdf.setTextColor(100, 100, 100);
+        pdf.setTextColor(190, 190, 190);
         pdf.text(`${i + 1} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
       }
       pdf.save(`DSI-Profile_${name}.pdf`);
@@ -829,9 +915,12 @@ export default function App() {
       console.error("PDF generation error:", err);
     }
 
+    // --- Cleanup: restore everything ---
+    styleEl.remove();
     el.classList.remove("pdf-mode");
     hideEls.forEach(e => e.style.display = "");
     if (footer) footer.style.borderTop = "";
+    logos.forEach((img, idx) => { img.src = originalSrcs[idx]; });
   };
 
   const handleSendEmail = async () => {
@@ -1068,10 +1157,10 @@ export default function App() {
         const scores = computeScores();
         const analysis = getAnalysis(scores);
         return (
-          <div ref={resultsRef} style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px", background: "#0a0b0e" }}>
+          <div ref={resultsRef} data-pdf-container style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px", background: "#0a0b0e" }}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
               <div style={{ marginBottom: 24 }}>
-                <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
+                <img data-logo src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 4, color: "#FECC02", textTransform: "uppercase", fontWeight: 500 }}>Rapport d'évaluation</span>
               </div>
               <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", color: "#f0f0f0" }}>{currentSession.candidateName}</h1>
@@ -1082,23 +1171,23 @@ export default function App() {
             </div>
 
             <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
-              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
-              <div style={{ display: "inline-block", marginBottom: 16, padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
+              <h2 data-profile-title style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
+              <div data-score-badge style={{ display: "inline-block", marginBottom: 16, padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                 Score global : {analysis.avg.toFixed(2)} / 4.00
               </div>
               <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
                 <div style={{ padding: "16px 20px", background: "rgba(82,183,136,0.05)", border: "1px solid rgba(82,183,136,0.15)", borderRadius: 2 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#52B788", marginBottom: 8 }}>Atouts identifiés</div>
+                  <div data-section-header="green" style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#52B788", marginBottom: 8 }}>Atouts identifiés</div>
                   <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.strengths}</p>
                 </div>
                 <div style={{ padding: "16px 20px", background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderRadius: 2 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#FECC02", marginBottom: 8 }}>Axes de développement recommandés</div>
+                  <div data-section-header="yellow" style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#FECC02", marginBottom: 8 }}>Axes de développement recommandés</div>
                   <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.development}</p>
                 </div>
                 <div style={{ padding: "16px 20px", background: "rgba(58,91,160,0.05)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#6A97DF", marginBottom: 8 }}>Environnements adaptés</div>
+                  <div data-section-header="blue" style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#6A97DF", marginBottom: 8 }}>Environnements adaptés</div>
                   <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.context}</p>
                 </div>
               </div>
@@ -1113,8 +1202,8 @@ export default function App() {
               {PILLARS.map((p, i) => (
                 <div key={i} style={{ flex: "1 1 250px", padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
-                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
-                  <div style={{ fontSize: 12, color: "#666" }}>/4.00</div>
+                  <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
+                  <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/4.00</div>
                 </div>
               ))}
             </div>
@@ -1128,20 +1217,20 @@ export default function App() {
 
             <div data-section="synthesis" style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(45,106,79,0.06)", border: "1px solid rgba(45,106,79,0.2)", borderRadius: 2 }}>
-                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#52B788", marginBottom: 16 }}>Points forts</h3>
+                <h3 data-section-header="green" style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#52B788", marginBottom: 16 }}>Points forts</h3>
                 {analysis.top3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <span>{dim.icon} {dim.name}</span>
-                    <span style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-dim-label>{dim.icon} {dim.name}</span>
+                    <span data-synth-score="green" style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
                   </div>
                 ))}
               </div>
               <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderRadius: 2 }}>
-                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 16 }}>Axes de développement</h3>
+                <h3 data-section-header="yellow" style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 16 }}>Axes de développement</h3>
                 {analysis.bottom3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <span>{dim.icon} {dim.name}</span>
-                    <span style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-dim-label>{dim.icon} {dim.name}</span>
+                    <span data-synth-score="yellow" style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -1165,8 +1254,8 @@ export default function App() {
 
             {/* --- Footer --- */}
             <div data-section="footer" style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: 140, objectFit: "contain", marginBottom: 12, opacity: 0.5, display: "block", margin: "0 auto 12px" }} />
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#FECC0288", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
+              <img data-logo src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: 140, objectFit: "contain", marginBottom: 12, opacity: 0.5, display: "block", margin: "0 auto 12px" }} />
+              <div data-dsi-label style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#FECC0288", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
               <div data-pdf-hide-btns="true" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>

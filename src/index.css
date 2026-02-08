@@ -24,10 +24,11 @@ input {
   color: #fff;
 }
 
-/* PDF export mode — force dark bg everywhere */
+/* ========================================
+   PDF EXPORT MODE — White theme overrides
+   ======================================== */
+
 .pdf-mode {
-  background: #0a0b0e !important;
-  color: #f0f0f0 !important;
   padding: 8px 0 16px !important;
 }
 
@@ -38,12 +39,7 @@ input {
   print-color-adjust: exact !important;
 }
 
-.pdf-mode div,
-.pdf-mode section,
-.pdf-mode svg {
-  background-color: transparent !important;
-}
-
+/* Layout: stack sections vertically for PDF */
 .pdf-mode [data-section="pillars"] {
   flex-direction: column !important;
 }

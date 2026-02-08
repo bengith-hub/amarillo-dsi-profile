@@ -28,13 +28,20 @@ input {
 .pdf-mode {
   background: #0a0b0e !important;
   color: #f0f0f0 !important;
-  padding: 32px 24px !important;
+  padding: 48px 32px 80px !important;
 }
 
+.pdf-mode,
 .pdf-mode * {
   color-adjust: exact !important;
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
+}
+
+.pdf-mode div,
+.pdf-mode section,
+.pdf-mode svg {
+  background-color: transparent !important;
 }
 
 .pdf-mode [data-section="synthesis"] {

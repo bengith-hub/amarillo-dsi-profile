@@ -561,7 +561,7 @@ function RankingCard({ question, dimColor, onComplete }) {
 }
 
 function RadarChart({ scores, size = 440 }) {
-  const pad = 80;
+  const pad = 120;
   const vw = size + pad * 2;
   const c = vw / 2, r = size * 0.38, n = 12;
   const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: c + (v / 4) * r * Math.cos(a), y: c + (v / 4) * r * Math.sin(a) }; };
@@ -716,13 +716,19 @@ export default function App() {
     if (!resultsRef.current) return;
     const el = resultsRef.current;
     const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
-    // Add PDF mode class for styling overrides
+    // Add PDF mode class
     el.classList.add("pdf-mode");
     // Hide interactive elements
     const hideEls = el.querySelectorAll("[data-pdf-hide], [data-pdf-hide-btns]");
     hideEls.forEach(e => e.style.display = "none");
+    // Also hide the footer border-top section completely in PDF
+    const footer = el.querySelector("[data-section='footer']");
+    if (footer) {
+      footer.style.borderTop = "none";
+      footer.style.paddingBottom = "60px";
+    }
     const opt = {
-      margin: 0,
+      margin: [12, 8, 12, 8],
       filename: `DSI-Profile_${name}.pdf`,
       image: { type: "png" },
       html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 900 },
@@ -733,6 +739,10 @@ export default function App() {
     // Restore
     el.classList.remove("pdf-mode");
     hideEls.forEach(e => e.style.display = "");
+    if (footer) {
+      footer.style.borderTop = "";
+      footer.style.paddingBottom = "";
+    }
   };
 
   const handleSendEmail = async () => {
@@ -1050,7 +1060,7 @@ export default function App() {
             </div>
 
             {/* --- Footer --- */}
-            <div style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div data-section="footer" style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: 140, objectFit: "contain", marginBottom: 12, opacity: 0.5, display: "block", margin: "0 auto 12px" }} />
               <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>

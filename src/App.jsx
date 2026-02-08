@@ -596,16 +596,64 @@ function getAnalysis(scores) {
   const bottom3 = sorted.slice(-3).map(([id]) => DIMENSIONS.find(d => d.id===id));
   const avg = Object.values(scores).reduce((a,b) => a+b, 0) / 12;
   const ps = PILLARS.map((_,pi) => { const ds=DIMENSIONS.filter(d=>d.pillar===pi); return ds.reduce((s,d)=>s+(scores[d.id]||0),0)/ds.length; });
-  let profile, desc;
-  if (ps[0]>=3&&ps[2]>=3) { profile="🚀 DSI Visionnaire"; desc="Leader transformationnel combinant vision stratégique et innovation. Idéal pour les entreprises en transformation digitale."; }
-  else if (ps[0]>=3&&ps[1]>=3) { profile="⚡ DSI Stratège-Opérationnel"; desc="Profil rare : leadership influent et excellence d'exécution. Parfait pour les programmes complexes à fort enjeu de delivery."; }
-  else if (ps[1]>=3&&ps[2]>=3) { profile="🔬 DSI Innovateur-Pragmatique"; desc="Excellence technique et innovation maîtrisée. Adapté aux environnements technologiques exigeants."; }
-  else if (ps[0]>=3) { profile="🎯 DSI Leader d'Influence"; desc="Fort en leadership COMEX et conduite du changement. Axe de développement : opérationnel ou innovation."; }
-  else if (ps[1]>=3) { profile="🏗️ DSI Bâtisseur"; desc="Solide, structuré, orienté résultats. Pour évoluer : leadership stratégique et innovation."; }
-  else if (ps[2]>=3) { profile="💡 DSI Explorateur"; desc="Orienté innovation et agilité. Pour maximiser l'impact : influence COMEX et rigueur opérationnelle."; }
-  else if (avg>=2.5) { profile="📈 DSI en Développement"; desc="Socle solide, potentiel d'évolution vers un rôle de leader stratégique."; }
-  else { profile="🌱 DSI Émergent"; desc="Profil en construction, bénéficierait d'un accompagnement coaching/mentorat."; }
-  return { top3, bottom3, avg, pillarScores: ps, profile, description: desc };
+  let profile, desc, strengths, development, context;
+  if (ps[0]>=3&&ps[2]>=3) {
+    profile="🚀 DSI Visionnaire";
+    desc="Profil de leader transformationnel combinant une forte capacité d'influence stratégique et un sens aigu de l'innovation. Ce DSI sait porter une vision ambitieuse auprès du COMEX tout en restant connecté aux tendances technologiques. Il excelle dans la conduite de transformations digitales d'envergure et sait fédérer les équipes autour d'un projet de changement.";
+    strengths="Capacité à articuler une vision technologique alignée sur la stratégie business, influence naturelle auprès de la Direction Générale, aptitude à identifier et exploiter les innovations disruptives.";
+    development="Veiller à ne pas négliger l'excellence opérationnelle et le delivery au quotidien. La vision doit s'accompagner de rigueur d'exécution pour maintenir la crédibilité.";
+    context="Idéal pour les entreprises en pleine transformation digitale, les organisations cherchant à repositionner leur IT comme levier stratégique, ou les contextes de forte croissance.";
+  }
+  else if (ps[0]>=3&&ps[1]>=3) {
+    profile="⚡ DSI Stratège-Opérationnel";
+    desc="Profil rare et très recherché alliant un leadership influent à une excellence d'exécution remarquable. Ce DSI sait à la fois porter des projets stratégiques au COMEX et garantir un delivery irréprochable. Il maîtrise la gestion de la complexité et sait piloter des programmes d'envergure avec rigueur tout en maintenant une influence déterminante sur la stratégie globale.";
+    strengths="Crédibilité forte auprès du COMEX grâce à des résultats concrets, capacité à gérer simultanément vision stratégique et contraintes opérationnelles, pilotage budgétaire maîtrisé.";
+    development="Intégrer davantage d'innovation et de veille technologique pour anticiper les ruptures. Développer une culture d'expérimentation au sein des équipes pour ne pas rester en mode « delivery only ».";
+    context="Parfait pour les programmes complexes à fort enjeu de delivery, les environnements réglementés (banque, santé, industrie), ou les DSI en phase de structuration et d'industrialisation.";
+  }
+  else if (ps[1]>=3&&ps[2]>=3) {
+    profile="🔬 DSI Innovateur-Pragmatique";
+    desc="Profil d'excellence technique combinant innovation maîtrisée et rigueur opérationnelle. Ce DSI est à l'aise dans les environnements technologiques complexes et sait transformer les idées innovantes en solutions concrètes et fiables. Il est reconnu pour sa capacité à maintenir un haut niveau de qualité technique tout en explorant de nouvelles approches.";
+    strengths="Maîtrise technique approfondie, capacité à évaluer et intégrer les nouvelles technologies de manière pragmatique, gestion des risques et cybersécurité solides.";
+    development="Renforcer le leadership d'influence et la communication au COMEX. Le savoir-faire technique doit se doubler d'une capacité à raconter une histoire stratégique convaincante.";
+    context="Adapté aux environnements technologiques exigeants, aux DSI de grande taille avec des enjeux de modernisation du SI, ou aux contextes nécessitant une forte expertise technique (cybersécurité, cloud, IA).";
+  }
+  else if (ps[0]>=3) {
+    profile="🎯 DSI Leader d'Influence";
+    desc="Profil orienté leadership et influence stratégique. Ce DSI excelle dans la relation avec le COMEX et la conduite du changement. Il sait positionner la DSI comme un partenaire stratégique et obtenir les arbitrages nécessaires. Sa force réside dans sa capacité à mobiliser les parties prenantes et à piloter des transformations organisationnelles.";
+    strengths="Excellente communication avec la Direction Générale, capacité à faire évoluer la perception de l'IT dans l'organisation, conduite du changement et gestion des parties prenantes.";
+    development="Renforcer soit l'axe opérationnel (rigueur d'exécution, pilotage budgétaire) soit l'axe innovation (veille technologique, agilité) pour compléter le profil et gagner en crédibilité technique.";
+    context="Pertinent pour les organisations où l'IT doit gagner en visibilité et en influence, les contextes de transformation culturelle, ou les DSI qui doivent repositionner leur rôle auprès de la Direction.";
+  }
+  else if (ps[1]>=3) {
+    profile="🏗️ DSI Bâtisseur";
+    desc="Profil solide, structuré et orienté résultats. Ce DSI est reconnu pour sa fiabilité et sa capacité à délivrer dans les délais et les budgets. Il maîtrise la complexité opérationnelle et apporte une rigueur appréciée dans le pilotage des projets et la gestion des risques. C'est un gestionnaire efficace qui sécurise l'existant tout en conduisant des évolutions maîtrisées.";
+    strengths="Pilotage budgétaire rigoureux, gestion des risques et cybersécurité, maîtrise de la complexité des SI, orientation résultats et sens du delivery.";
+    development="Développer le leadership stratégique (influence COMEX, vision IT) et la capacité d'innovation pour passer d'un rôle de gestionnaire à un rôle de leader transformationnel.";
+    context="Adapté aux environnements stables nécessitant fiabilité et rigueur, aux contextes de rationalisation du SI, ou aux organisations où la DSI doit d'abord prouver sa crédibilité opérationnelle.";
+  }
+  else if (ps[2]>=3) {
+    profile="💡 DSI Explorateur";
+    desc="Profil tourné vers l'innovation et l'agilité. Ce DSI est un early adopter qui sait identifier les tendances technologiques et les opportunités d'innovation. Il est à l'aise avec l'incertitude et favorise une culture d'expérimentation au sein de ses équipes. Sa posture orientée client et sa résilience lui permettent de s'adapter rapidement aux changements.";
+    strengths="Veille technologique active, culture d'innovation et d'expérimentation, agilité organisationnelle, orientation client et capacité d'adaptation.";
+    development="Renforcer l'influence au COMEX pour faire valoir la vision innovation, et améliorer la rigueur opérationnelle (pilotage budgétaire, gestion des risques) pour sécuriser les initiatives.";
+    context="Idéal pour les startups en croissance, les entreprises en phase d'exploration digitale, ou les contextes nécessitant une forte capacité d'adaptation et d'innovation rapide.";
+  }
+  else if (avg>=2.5) {
+    profile="📈 DSI en Développement";
+    desc="Profil présentant un socle de compétences solide et équilibré, avec un potentiel d'évolution significatif. Ce DSI dispose des fondamentaux nécessaires pour exercer la fonction mais n'a pas encore développé de dominante forte. C'est un profil prometteur qui gagnerait à se spécialiser et à renforcer une ou deux dimensions clés pour affirmer sa posture de leader.";
+    strengths="Polyvalence et équilibre entre les différents piliers, capacité d'apprentissage, base solide pour évoluer dans plusieurs directions.";
+    development="Identifier 2-3 dimensions prioritaires à développer en fonction du contexte visé. Un accompagnement type coaching de dirigeant ou mentorat par un DSI expérimenté serait particulièrement bénéfique.";
+    context="Adapté à des postes de DSI dans des organisations de taille intermédiaire, ou comme adjoint/directeur de programme dans une grande DSI avant une prise de poste de DSI à part entière.";
+  }
+  else {
+    profile="🌱 DSI Émergent";
+    desc="Profil en phase de construction, avec des marges de progression importantes sur l'ensemble des dimensions évaluées. Les réponses suggèrent une approche encore opérationnelle et réactive, avec un potentiel à développer vers une posture plus stratégique et proactive. Ce profil bénéficierait fortement d'un plan de développement structuré.";
+    strengths="Potentiel de croissance sur tous les axes, conscience des enjeux IT, socle technique sur lequel construire.";
+    development="Prioriser le développement du leadership (prise de parole COMEX, conduite du changement) et de la rigueur opérationnelle (pilotage budgétaire, gestion des risques). Un parcours de formation dirigeant IT et un mentorat sont fortement recommandés.";
+    context="Ce profil gagnerait à évoluer d'abord dans un rôle de directeur de programme ou responsable IT avant de prendre un poste de DSI, ou à être accompagné par un coach spécialisé dans un premier poste.";
+  }
+  return { top3, bottom3, avg, pillarScores: ps, profile, description: desc, strengths, development, context };
 }
 
 // ============================================================
@@ -723,26 +771,32 @@ export default function App() {
     hideEls.forEach(e => e.style.display = "none");
     const footer = el.querySelector("[data-section='footer']");
     if (footer) footer.style.borderTop = "none";
+    // Use margin to create space for page numbers, html2canvas bg fills content area
     const opt = {
-      margin: 0,
+      margin: [16, 10, 12, 10],
       filename: `DSI-Profile_${name}.pdf`,
       image: { type: "png" },
-      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 900 },
+      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 880 },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
-    // Generate PDF and add page numbers
     const worker = html2pdf().set(opt).from(el);
     await worker.toPdf().get("pdf").then((pdf) => {
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
       const totalPages = pdf.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
-        // Black background for margin areas (fill full page)
+        // Fill margin areas with dark bg (top, bottom, left, right strips)
         pdf.setFillColor(10, 11, 14);
-        // Small footer area for page number
+        pdf.rect(0, 0, pw, 16, "F"); // top margin
+        pdf.rect(0, ph - 12, pw, 12, "F"); // bottom margin
+        pdf.rect(0, 0, 10, ph, "F"); // left margin
+        pdf.rect(pw - 10, 0, 10, ph, "F"); // right margin
+        // Page number
         pdf.setFontSize(8);
-        pdf.setTextColor(120, 120, 120);
-        pdf.text(`${i} / ${totalPages}`, pdf.internal.pageSize.getWidth() / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`${i} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
       }
     }).save();
     // Restore
@@ -991,18 +1045,33 @@ export default function App() {
                 <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
                 <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 4, color: "#FECC02", textTransform: "uppercase", fontWeight: 500 }}>Rapport d'évaluation</span>
               </div>
-              <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #FECC02, #FEE066, #FECC02)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
+              <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", color: "#f0f0f0" }}>{currentSession.candidateName}</h1>
               <p style={{ color: "#888", fontSize: 15 }}>
                 {currentSession.candidateRole || "DSI"} · {FORMATS[currentSession.format]?.label} · {new Date(currentSession.createdAt).toLocaleDateString("fr-FR")}
                 {currentSession.totalTimeMs > 0 && ` · Temps : ${formatTime(currentSession.totalTimeMs)}`}
               </p>
             </div>
 
-            <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
-              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 8, color: "#FECC02" }}>{analysis.profile}</h2>
-              <p style={{ color: "#aaa", lineHeight: 1.7, fontSize: 15 }}>{analysis.description}</p>
-              <div style={{ display: "inline-block", marginTop: 16, padding: "6px 16px", background: "rgba(232,168,56,0.1)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
+            <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
+              <div style={{ display: "inline-block", marginBottom: 16, padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                 Score global : {analysis.avg.toFixed(2)} / 4.00
+              </div>
+              <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+                <div style={{ padding: "16px 20px", background: "rgba(82,183,136,0.05)", border: "1px solid rgba(82,183,136,0.15)", borderRadius: 2 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#52B788", marginBottom: 8 }}>Atouts identifiés</div>
+                  <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.strengths}</p>
+                </div>
+                <div style={{ padding: "16px 20px", background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderRadius: 2 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#FECC02", marginBottom: 8 }}>Axes de développement recommandés</div>
+                  <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.development}</p>
+                </div>
+                <div style={{ padding: "16px 20px", background: "rgba(58,91,160,0.05)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#6A97DF", marginBottom: 8 }}>Environnements adaptés</div>
+                  <p style={{ color: "#aaa", fontSize: 13, lineHeight: 1.7, margin: 0 }}>{analysis.context}</p>
+                </div>
               </div>
             </div>
 

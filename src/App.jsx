@@ -770,9 +770,9 @@ export default function App() {
     if (footer) footer.style.borderTop = "none";
 
     try {
-      // Step 1: Capture element to canvas
+      // Step 1: Capture full element to one big canvas
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(el, {
+      const fullCanvas = await html2canvas(el, {
         scale: 2,
         backgroundColor: "#0a0b0e",
         useCORS: true,
@@ -780,36 +780,45 @@ export default function App() {
         width: 880,
         windowWidth: 880,
       });
-      const imgData = canvas.toDataURL("image/png");
 
-      // Step 2: Create PDF manually with dark bg on every page
+      // Step 2: Setup PDF dimensions
       const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
       const pw = pdf.internal.pageSize.getWidth();   // 210mm
       const ph = pdf.internal.pageSize.getHeight();   // 297mm
       const mTop = 16, mRight = 10, mBottom = 14, mLeft = 10;
-      const contentW = pw - mLeft - mRight;           // usable width in mm
-      const contentH = ph - mTop - mBottom;           // usable height per page in mm
+      const contentW = pw - mLeft - mRight;
+      const contentH = ph - mTop - mBottom;
 
-      // Image dimensions in mm (based on canvas pixels → mm conversion)
-      const imgWmm = contentW;
-      const imgHmm = (canvas.height / canvas.width) * contentW;
-      const totalPages = Math.ceil(imgHmm / contentH);
+      // Pixels per mm based on content area mapping
+      const pxPerMm = fullCanvas.width / contentW;
+      const sliceHpx = Math.floor(contentH * pxPerMm);
+      const totalPages = Math.ceil(fullCanvas.height / sliceHpx);
 
+      // Step 3: Slice the canvas into page-sized chunks and place each on a dark page
       for (let i = 0; i < totalPages; i++) {
         if (i > 0) pdf.addPage();
-        // Paint full page dark
+        // Paint full page dark background
         pdf.setFillColor(10, 11, 14);
         pdf.rect(0, 0, pw, ph, "F");
-        // Place the full image offset so correct slice shows in content area
-        const yOffset = mTop - i * contentH;
-        // Clip to content area using save/restore
-        pdf.saveGraphicsState();
-        // Rectangular clip path for content area
-        pdf.rect(mLeft, mTop, contentW, contentH);
-        pdf.clip();
-        pdf.addImage(imgData, "PNG", mLeft, yOffset, imgWmm, imgHmm);
-        pdf.restoreGraphicsState();
+
+        // Slice canvas for this page
+        const srcY = i * sliceHpx;
+        const srcH = Math.min(sliceHpx, fullCanvas.height - srcY);
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = fullCanvas.width;
+        sliceCanvas.height = srcH;
+        const ctx = sliceCanvas.getContext("2d");
+        // Fill with dark bg first (in case of rounding gaps)
+        ctx.fillStyle = "#0a0b0e";
+        ctx.fillRect(0, 0, sliceCanvas.width, srcH);
+        ctx.drawImage(fullCanvas, 0, srcY, fullCanvas.width, srcH, 0, 0, fullCanvas.width, srcH);
+        const sliceData = sliceCanvas.toDataURL("image/png");
+
+        // Place slice in content area
+        const sliceHmm = srcH / pxPerMm;
+        pdf.addImage(sliceData, "PNG", mLeft, mTop, contentW, sliceHmm);
+
         // Page number
         pdf.setFontSize(8);
         pdf.setTextColor(100, 100, 100);

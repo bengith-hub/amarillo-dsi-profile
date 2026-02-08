@@ -716,27 +716,23 @@ export default function App() {
     if (!resultsRef.current) return;
     const el = resultsRef.current;
     const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
-    // Temporarily force background color for PDF capture
-    const origBg = el.style.background;
-    el.style.background = "#0a0b0e";
-    // Hide email section and footer buttons during PDF capture
-    const emailSection = el.querySelector("[data-pdf-hide]");
-    const footerBtns = el.querySelector("[data-pdf-hide-btns]");
-    if (emailSection) emailSection.style.display = "none";
-    if (footerBtns) footerBtns.style.display = "none";
+    // Add PDF mode class for styling overrides
+    el.classList.add("pdf-mode");
+    // Hide interactive elements
+    const hideEls = el.querySelectorAll("[data-pdf-hide], [data-pdf-hide-btns]");
+    hideEls.forEach(e => e.style.display = "none");
     const opt = {
-      margin: [8, 8, 8, 8],
+      margin: 0,
       filename: `DSI-Profile_${name}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false },
+      image: { type: "png" },
+      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 900 },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
     await html2pdf().set(opt).from(el).save();
     // Restore
-    el.style.background = origBg;
-    if (emailSection) emailSection.style.display = "";
-    if (footerBtns) footerBtns.style.display = "";
+    el.classList.remove("pdf-mode");
+    hideEls.forEach(e => e.style.display = "");
   };
 
   const handleSendEmail = async () => {
@@ -973,7 +969,7 @@ export default function App() {
         const scores = computeScores();
         const analysis = getAnalysis(scores);
         return (
-          <div ref={resultsRef} style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
+          <div ref={resultsRef} style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px", background: "#0a0b0e" }}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
               <div style={{ marginBottom: 24 }}>
                 <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
@@ -999,9 +995,9 @@ export default function App() {
               <RadarChart scores={scores} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16, marginBottom: 40 }}>
+            <div data-section="pillars" style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
               {PILLARS.map((p, i) => (
-                <div key={i} style={{ padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
+                <div key={i} style={{ flex: "1 1 250px", padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
                   <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>/4.00</div>
@@ -1016,20 +1012,22 @@ export default function App() {
               </div>
             ))}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 40 }}>
-              <div style={{ padding: "28px 32px", background: "rgba(45,106,79,0.06)", border: "1px solid rgba(45,106,79,0.2)", borderRadius: 2 }}>
+            <div data-section="synthesis" style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(45,106,79,0.06)", border: "1px solid rgba(45,106,79,0.2)", borderRadius: 2 }}>
                 <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#52B788", marginBottom: 16 }}>Points forts</h3>
                 {analysis.top3.map(dim => (
-                  <div key={dim.id} style={{ padding: "8px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    {dim.icon} {dim.name}<span style={{ float: "right", color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                  <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <span>{dim.icon} {dim.name}</span>
+                    <span style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ padding: "28px 32px", background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderRadius: 2 }}>
+              <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderRadius: 2 }}>
                 <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#E8A838", marginBottom: 16 }}>Axes de développement</h3>
                 {analysis.bottom3.map(dim => (
-                  <div key={dim.id} style={{ padding: "8px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    {dim.icon} {dim.name}<span style={{ float: "right", color: "#E8A838", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                  <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <span>{dim.icon} {dim.name}</span>
+                    <span style={{ color: "#E8A838", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
                   </div>
                 ))}
               </div>

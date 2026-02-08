@@ -66,7 +66,7 @@ export async function handler(event) {
         "Authorization": `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: "Amarillo Search <onboarding@resend.dev>",
+        from: "Amarillo Search <noreply@amarillosearch.com>",
         to: [to],
         subject: `DSI Profile™ — Résultats de ${candidateName}`,
         html: htmlBody,

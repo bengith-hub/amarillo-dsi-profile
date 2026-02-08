@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import html2pdf from "html2pdf.js";
+import amarilloLogo from "./assets/amarillo-logo.png";
+import amarilloLogoWhite from "./assets/amarillo-logo-white.png";
 
 // ============================================================
 // AMARILLO DSI PROFILE™ v3
@@ -469,6 +472,7 @@ async function saveSession(session) {
       role: session.candidateRole,
       format: session.format,
       status: session.status,
+      email: session.candidateEmail || "",
       createdAt: session.createdAt,
       updatedAt: new Date().toISOString()
     };
@@ -558,15 +562,17 @@ function RankingCard({ question, dimColor, onComplete }) {
 }
 
 function RadarChart({ scores, size = 440 }) {
-  const c = size / 2, r = size * 0.38, n = 12;
+  const pad = 80;
+  const vw = size + pad * 2;
+  const c = vw / 2, r = size * 0.38, n = 12;
   const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: c + (v / 4) * r * Math.cos(a), y: c + (v / 4) * r * Math.sin(a) }; };
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: "100%", maxWidth: size, display: "block", margin: "0 auto" }}>
+    <svg viewBox={`0 0 ${vw} ${vw}`} style={{ width: "100%", maxWidth: vw, display: "block", margin: "0 auto" }}>
       {[1,2,3,4].map(l => <polygon key={l} points={DIMENSIONS.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />)}
       {DIMENSIONS.map((d,i) => { const p=pt(i,4); return <line key={d.id} x1={c} y1={c} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />; })}
       <polygon points={DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#E8A838" strokeWidth="2.5" />
       {DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return <circle key={d.id} cx={p.x} cy={p.y} r="5" fill={d.color} stroke="#fff" strokeWidth="1.5" />; })}
-      {DIMENSIONS.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="9.5" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
+      {DIMENSIONS.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="11" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
     </svg>
   );
 }
@@ -622,6 +628,12 @@ export default function App() {
   const [newRole, setNewRole] = useState("");
   const [newFormat, setNewFormat] = useState("standard");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [candidateEmail, setCandidateEmail] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const resultsRef = useRef(null);
 
   useEffect(() => { if (view === "admin") loadSessions(); }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
@@ -701,6 +713,57 @@ export default function App() {
 
   const formatTime = (ms) => { const m = Math.floor(ms / 60000); const s = Math.floor((ms % 60000) / 1000); return `${m} min ${s}s`; };
 
+  const handleDownloadPDF = async () => {
+    if (!resultsRef.current) return;
+    const el = resultsRef.current;
+    const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
+    const opt = {
+      margin: [10, 10, 10, 10],
+      filename: `DSI-Profile_${name}.pdf`,
+      image: { type: "jpeg", quality: 0.95 },
+      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+    };
+    await html2pdf().set(opt).from(el).save();
+  };
+
+  const handleSendEmail = async () => {
+    if (!candidateEmail.includes("@") || emailSending) return;
+    setEmailSending(true);
+    setEmailError("");
+    setEmailSent(false);
+    try {
+      // Save email to JSONBin
+      if (currentSession) {
+        const updated = { ...currentSession, candidateEmail };
+        setCurrentSession(updated);
+        await saveSession(updated);
+      }
+      // Send email via Netlify Function
+      const scores = computeScores();
+      const analysis = getAnalysis(scores);
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: candidateEmail,
+          candidateName: currentSession.candidateName,
+          profileType: analysis.profile,
+          globalScore: analysis.avg.toFixed(2),
+          resultsCode: currentSession.code,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      setEmailSent(true);
+    } catch (e) {
+      setEmailError("Erreur lors de l'envoi. Réessayez plus tard.");
+      console.error("Email error:", e);
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const progress = questions.length > 0 ? (currentQ / questions.length) * 100 : 0;
 
   const box = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 };
@@ -714,8 +777,8 @@ export default function App() {
       {/* ===== HOME ===== */}
       {view === "home" && (
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "60px 24px", textAlign: "center", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ display: "inline-block", padding: "12px 32px", marginBottom: 24, border: "2px solid #E8A838", background: "rgba(232,168,56,0.05)", alignSelf: "center" }}>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, letterSpacing: 6, color: "#E8A838", textTransform: "uppercase" }}>Amarillo Search</span>
+          <div style={{ marginBottom: 24, alignSelf: "center" }}>
+            <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 60, objectFit: "contain" }} />
           </div>
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 16, background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             DSI Profile™
@@ -751,9 +814,25 @@ export default function App() {
           <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, marginBottom: 32, color: "#E8A838" }}>Administration</h2>
           <div style={{ ...box, padding: 32 }}>
             <label style={{ display: "block", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>Mot de passe</label>
-            <input type="password" value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && adminPwd === ADMIN_PASSWORD) setView("admin"); }}
-              style={{ ...input, marginBottom: 16 }} />
+            <div style={{ position: "relative", marginBottom: 16 }}>
+              <input type={showPassword ? "text" : "password"} value={adminPwd} onChange={(e) => setAdminPwd(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && adminPwd === ADMIN_PASSWORD) setView("admin"); }}
+                style={{ ...input, paddingRight: 48 }} />
+              <button onClick={() => setShowPassword(!showPassword)} type="button"
+                style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}>
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
             <button onClick={() => { if (adminPwd === ADMIN_PASSWORD) setView("admin"); }} style={btn(adminPwd.length > 0)}>Connexion</button>
           </div>
           <button onClick={() => setView("home")} style={{ ...btnOutline, marginTop: 24 }}>← Retour</button>
@@ -818,7 +897,7 @@ export default function App() {
                 <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {FORMATS[s.format]?.label}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {FORMATS[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#E8A838", fontWeight: 700 }}>{s.code}</span>
@@ -883,10 +962,11 @@ export default function App() {
         const scores = computeScores();
         const analysis = getAnalysis(scores);
         return (
-          <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
+          <div ref={resultsRef} style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
-              <div style={{ display: "inline-block", padding: "8px 24px", marginBottom: 20, border: "1px solid #E8A83855", borderRadius: 2, background: "rgba(232,168,56,0.05)" }}>
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A838", textTransform: "uppercase" }}>Amarillo Search · Rapport d'évaluation</span>
+              <div style={{ marginBottom: 20 }}>
+                <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 44, objectFit: "contain", marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
+                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A838", textTransform: "uppercase" }}>Rapport d'évaluation</span>
               </div>
               <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
               <p style={{ color: "#888", fontSize: 15 }}>
@@ -944,10 +1024,33 @@ export default function App() {
               </div>
             </div>
 
+            {/* --- Email section --- */}
+            <div style={{ ...box, padding: 32, marginBottom: 40 }}>
+              <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 16 }}>Recevoir vos résultats par email</h3>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="email" value={candidateEmail} onChange={(e) => setCandidateEmail(e.target.value)} placeholder="votre@email.com"
+                  style={{ ...input, flex: 1, minWidth: 200 }}
+                  onKeyDown={(e) => e.key === "Enter" && candidateEmail.includes("@") && !emailSending && handleSendEmail()} />
+                <button onClick={handleSendEmail} disabled={!candidateEmail.includes("@") || emailSending}
+                  style={btn(candidateEmail.includes("@") && !emailSending)}>
+                  {emailSending ? "Envoi..." : emailSent ? "✓ Envoyé" : "Envoyer"}
+                </button>
+              </div>
+              {emailSent && <p style={{ color: "#52B788", fontSize: 13, marginTop: 8 }}>✓ Email envoyé avec succès !</p>}
+              {emailError && <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 8 }}>{emailError}</p>}
+            </div>
+
+            {/* --- Footer --- */}
             <div style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8 }}>Amarillo Search · DSI Profile™</div>
+              <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 32, objectFit: "contain", marginBottom: 12, opacity: 0.6 }} />
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8 }}>DSI Profile™</div>
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
-              <button onClick={() => { setCurrentSession(null); setView("home"); }} style={btnOutline}>← Retour à l'accueil</button>
+              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+                <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#E8A838", borderColor: "#E8A83855" }}>
+                  📄 Télécharger PDF
+                </button>
+                <button onClick={() => { setCurrentSession(null); setView("home"); }} style={btnOutline}>← Retour à l'accueil</button>
+              </div>
             </div>
           </div>
         );

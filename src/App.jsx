@@ -16,10 +16,10 @@ const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || "amarillo2025";
 
 // --- DATA ---
 const DIMENSIONS = [
-  { id: "vision", name: "Vision Stratégique IT", pillar: 0, icon: "🔭", color: "#E8A838" },
-  { id: "leadership", name: "Leadership d'Équipe", pillar: 0, icon: "👥", color: "#D4912A" },
-  { id: "change", name: "Conduite du Changement", pillar: 0, icon: "🔄", color: "#C07A1C" },
-  { id: "influence", name: "Influence COMEX", pillar: 0, icon: "🎯", color: "#AC630E" },
+  { id: "vision", name: "Vision Stratégique IT", pillar: 0, icon: "🔭", color: "#FECC02" },
+  { id: "leadership", name: "Leadership d'Équipe", pillar: 0, icon: "👥", color: "#E5B800" },
+  { id: "change", name: "Conduite du Changement", pillar: 0, icon: "🔄", color: "#D4A900" },
+  { id: "influence", name: "Influence COMEX", pillar: 0, icon: "🎯", color: "#B8930A" },
   { id: "budget", name: "Pilotage Budgétaire & ROI", pillar: 1, icon: "📊", color: "#2D6A4F" },
   { id: "risk", name: "Gestion des Risques & Cyber", pillar: 1, icon: "🛡️", color: "#40916C" },
   { id: "complexity", name: "Maîtrise de la Complexité", pillar: 1, icon: "⚙️", color: "#52B788" },
@@ -31,7 +31,7 @@ const DIMENSIONS = [
 ];
 
 const PILLARS = [
-  { name: "Leadership & Influence", color: "#E8A838" },
+  { name: "Leadership & Influence", color: "#FECC02" },
   { name: "Excellence Opérationnelle", color: "#2D6A4F" },
   { name: "Innovation & Posture", color: "#3A5BA0" },
 ];
@@ -510,7 +510,7 @@ function RankingCard({ question, dimColor, onComplete }) {
   const [ranked, setRanked] = useState([]);
   const [remaining, setRemaining] = useState(() => [...question.options].sort(() => Math.random() - 0.5));
   const rankLabels = ["1er — Me ressemble le plus", "2e", "3e", "4e — Me ressemble le moins"];
-  const rankColors = ["#E8A838", "#b8923a", "#7a6a4a", "#4a4a4a"];
+  const rankColors = ["#FECC02", "#b8923a", "#7a6a4a", "#4a4a4a"];
 
   const selectOption = (opt) => {
     const newRanked = [...ranked, opt];
@@ -569,7 +569,7 @@ function RadarChart({ scores, size = 440 }) {
     <svg viewBox={`0 0 ${vw} ${vw}`} style={{ width: "100%", maxWidth: vw, display: "block", margin: "0 auto" }}>
       {[1,2,3,4].map(l => <polygon key={l} points={DIMENSIONS.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />)}
       {DIMENSIONS.map((d,i) => { const p=pt(i,4); return <line key={d.id} x1={c} y1={c} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />; })}
-      <polygon points={DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#E8A838" strokeWidth="2.5" />
+      <polygon points={DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#FECC02" strokeWidth="2.5" />
       {DIMENSIONS.map((d,i) => { const p=pt(i,scores[d.id]||0); return <circle key={d.id} cx={p.x} cy={p.y} r="5" fill={d.color} stroke="#fff" strokeWidth="1.5" />; })}
       {DIMENSIONS.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="11" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
     </svg>
@@ -721,28 +721,34 @@ export default function App() {
     // Hide interactive elements
     const hideEls = el.querySelectorAll("[data-pdf-hide], [data-pdf-hide-btns]");
     hideEls.forEach(e => e.style.display = "none");
-    // Also hide the footer border-top section completely in PDF
     const footer = el.querySelector("[data-section='footer']");
-    if (footer) {
-      footer.style.borderTop = "none";
-      footer.style.paddingBottom = "60px";
-    }
+    if (footer) footer.style.borderTop = "none";
     const opt = {
-      margin: [12, 8, 12, 8],
+      margin: 0,
       filename: `DSI-Profile_${name}.pdf`,
       image: { type: "png" },
       html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 900 },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
-    await html2pdf().set(opt).from(el).save();
+    // Generate PDF and add page numbers
+    const worker = html2pdf().set(opt).from(el);
+    await worker.toPdf().get("pdf").then((pdf) => {
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        // Black background for margin areas (fill full page)
+        pdf.setFillColor(10, 11, 14);
+        // Small footer area for page number
+        pdf.setFontSize(8);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text(`${i} / ${totalPages}`, pdf.internal.pageSize.getWidth() / 2, pdf.internal.pageSize.getHeight() - 5, { align: "center" });
+      }
+    }).save();
     // Restore
     el.classList.remove("pdf-mode");
     hideEls.forEach(e => e.style.display = "");
-    if (footer) {
-      footer.style.borderTop = "";
-      footer.style.paddingBottom = "";
-    }
+    if (footer) footer.style.borderTop = "";
   };
 
   const handleSendEmail = async () => {
@@ -785,7 +791,7 @@ export default function App() {
 
   const box = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 };
   const input = { width: "100%", padding: "14px 16px", fontSize: 16, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, color: "#f0f0f0", outline: "none", fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box" };
-  const btn = (active = true) => ({ padding: "14px 28px", fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 500, letterSpacing: 2, textTransform: "uppercase", background: active ? "linear-gradient(135deg, #E8A838, #D4912A)" : "rgba(255,255,255,0.05)", color: active ? "#0a0b0e" : "#555", border: "none", borderRadius: 2, cursor: active ? "pointer" : "default" });
+  const btn = (active = true) => ({ padding: "14px 28px", fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 500, letterSpacing: 2, textTransform: "uppercase", background: active ? "linear-gradient(135deg, #FECC02, #E5B800)" : "rgba(255,255,255,0.05)", color: active ? "#0a0b0e" : "#555", border: "none", borderRadius: 2, cursor: active ? "pointer" : "default" });
   const btnOutline = { padding: "12px 24px", fontSize: 13, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: "transparent", color: "#888", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, cursor: "pointer" };
 
   return (
@@ -797,7 +803,7 @@ export default function App() {
           <div style={{ marginBottom: 32, alignSelf: "center" }}>
             <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(220px, 50vw, 340px)", objectFit: "contain", display: "block" }} />
           </div>
-          <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 12, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 12, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #FECC02, #FEE066, #FECC02)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             DSI Profile™
           </h1>
           <p style={{ color: "#888", fontSize: 15, marginBottom: 48, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}>
@@ -828,7 +834,7 @@ export default function App() {
       {/* ===== ADMIN LOGIN ===== */}
       {view === "adminLogin" && (
         <div style={{ maxWidth: 400, margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
-          <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, marginBottom: 32, color: "#E8A838" }}>Administration</h2>
+          <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, marginBottom: 32, color: "#FECC02" }}>Administration</h2>
           <div style={{ ...box, padding: 32 }}>
             <label style={{ display: "block", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>Mot de passe</label>
             <div style={{ position: "relative", marginBottom: 16 }}>
@@ -860,12 +866,12 @@ export default function App() {
       {view === "admin" && (
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
-            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#E8A838", margin: 0 }}>Administration</h2>
+            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#FECC02", margin: 0 }}>Administration</h2>
             <button onClick={() => { setView("home"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
           </div>
 
           <div style={{ ...box, padding: 32, marginBottom: 40 }}>
-            <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#E8A838", marginBottom: 24 }}>Créer une nouvelle évaluation</h3>
+            <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 24 }}>Créer une nouvelle évaluation</h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Candidat</label>
@@ -884,8 +890,8 @@ export default function App() {
                   style={{
                     flex: 1, padding: "16px 12px", textAlign: "center", borderRadius: 2, cursor: "pointer",
                     background: newFormat === key ? "rgba(232,168,56,0.12)" : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${newFormat === key ? "#E8A838" : "rgba(255,255,255,0.08)"}`,
-                    color: newFormat === key ? "#E8A838" : "#888",
+                    border: `1px solid ${newFormat === key ? "#FECC02" : "rgba(255,255,255,0.08)"}`,
+                    color: newFormat === key ? "#FECC02" : "#888",
                   }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{fmt.label}</div>
                   <div style={{ fontSize: 12 }}>{fmt.total} questions</div>
@@ -908,7 +914,7 @@ export default function App() {
             {sessions.length === 0 && <p style={{ color: "#555", textAlign: "center", padding: 24 }}>Aucune session créée</p>}
 
             {sessions.map((s) => {
-              const statusColors = { pending: "#888", in_progress: "#E8A838", completed: "#52B788" };
+              const statusColors = { pending: "#888", in_progress: "#FECC02", completed: "#52B788" };
               const statusLabels = { pending: "En attente", in_progress: "En cours", completed: "Terminé" };
               return (
                 <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
@@ -917,7 +923,7 @@ export default function App() {
                     <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {FORMATS[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#E8A838", fontWeight: 700 }}>{s.code}</span>
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#FECC02", fontWeight: 700 }}>{s.code}</span>
                     <span style={{ fontSize: 11, padding: "4px 10px", borderRadius: 2, background: `${statusColors[s.status]}22`, color: statusColors[s.status], fontFamily: "'DM Mono', monospace" }}>
                       {statusLabels[s.status]}
                     </span>
@@ -944,7 +950,7 @@ export default function App() {
         return (
           <div style={{ maxWidth: 750, margin: "0 auto", padding: "40px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#E8A838", letterSpacing: 2 }}>AMARILLO DSI PROFILE™</span>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#FECC02", letterSpacing: 2 }}>AMARILLO DSI PROFILE™</span>
               <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, color: "#666" }}>{currentQ + 1} / {questions.length}</span>
                 <button onClick={handleSaveAndQuit} disabled={saving}
@@ -954,7 +960,7 @@ export default function App() {
               </div>
             </div>
             <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginBottom: 8 }}>
-              <div style={{ height: "100%", borderRadius: 2, width: `${progress}%`, background: "linear-gradient(90deg, #E8A838, #D4912A)", transition: "width 0.5s ease" }} />
+              <div style={{ height: "100%", borderRadius: 2, width: `${progress}%`, background: "linear-gradient(90deg, #FECC02, #E5B800)", transition: "width 0.5s ease" }} />
             </div>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 32, fontFamily: "'DM Mono', monospace" }}>
               {fmt.label} · {fmt.duration} · Code : {currentSession.code}
@@ -983,19 +989,19 @@ export default function App() {
             <div style={{ textAlign: "center", marginBottom: 48 }}>
               <div style={{ marginBottom: 24 }}>
                 <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
-                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 4, color: "#E8A838", textTransform: "uppercase", fontWeight: 500 }}>Rapport d'évaluation</span>
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 4, color: "#FECC02", textTransform: "uppercase", fontWeight: 500 }}>Rapport d'évaluation</span>
               </div>
-              <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
+              <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #FECC02, #FEE066, #FECC02)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
               <p style={{ color: "#888", fontSize: 15 }}>
                 {currentSession.candidateRole || "DSI"} · {FORMATS[currentSession.format]?.label} · {new Date(currentSession.createdAt).toLocaleDateString("fr-FR")}
                 {currentSession.totalTimeMs > 0 && ` · Temps : ${formatTime(currentSession.totalTimeMs)}`}
               </p>
             </div>
 
-            <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderLeft: "4px solid #E8A838", borderRadius: 2 }}>
-              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 8, color: "#E8A838" }}>{analysis.profile}</h2>
+            <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 8, color: "#FECC02" }}>{analysis.profile}</h2>
               <p style={{ color: "#aaa", lineHeight: 1.7, fontSize: 15 }}>{analysis.description}</p>
-              <div style={{ display: "inline-block", marginTop: 16, padding: "6px 16px", background: "rgba(232,168,56,0.1)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#E8A838" }}>
+              <div style={{ display: "inline-block", marginTop: 16, padding: "6px 16px", background: "rgba(232,168,56,0.1)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                 Score global : {analysis.avg.toFixed(2)} / 4.00
               </div>
             </div>
@@ -1016,7 +1022,7 @@ export default function App() {
             </div>
 
             {PILLARS.map((p, pi) => (
-              <div key={pi} style={{ ...box, padding: "28px 32px", marginBottom: 20 }}>
+              <div key={pi} data-section="pillar-detail" style={{ ...box, padding: "28px 32px", marginBottom: 20 }}>
                 <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: p.color, marginBottom: 20 }}>{p.name}</h3>
                 {DIMENSIONS.filter(d => d.pillar === pi).map(dim => <ScoreBar key={dim.id} dimension={dim} score={scores[dim.id]} />)}
               </div>
@@ -1033,11 +1039,11 @@ export default function App() {
                 ))}
               </div>
               <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderRadius: 2 }}>
-                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#E8A838", marginBottom: 16 }}>Axes de développement</h3>
+                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 16 }}>Axes de développement</h3>
                 {analysis.bottom3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <span>{dim.icon} {dim.name}</span>
-                    <span style={{ color: "#E8A838", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -1062,10 +1068,10 @@ export default function App() {
             {/* --- Footer --- */}
             <div data-section="footer" style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: 140, objectFit: "contain", marginBottom: 12, opacity: 0.5, display: "block", margin: "0 auto 12px" }} />
-              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
+              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#FECC0288", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
               <div data-pdf-hide-btns="true" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-                <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#E8A838", borderColor: "#E8A83855" }}>
+                <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
                   📄 Télécharger PDF
                 </button>
                 <button onClick={() => { setCurrentSession(null); setView("home"); }} style={btnOutline}>← Retour à l'accueil</button>

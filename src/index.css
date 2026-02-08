@@ -20,7 +20,7 @@ input {
 }
 
 ::selection {
-  background: rgba(232, 168, 56, 0.3);
+  background: rgba(254, 204, 2, 0.3);
   color: #fff;
 }
 
@@ -44,10 +44,24 @@ input {
   background-color: transparent !important;
 }
 
+.pdf-mode [data-section="pillars"] {
+  flex-direction: column !important;
+}
+
+.pdf-mode [data-section="pillars"] > div {
+  flex: 1 1 100% !important;
+}
+
 .pdf-mode [data-section="synthesis"] {
   flex-direction: column !important;
 }
 
 .pdf-mode [data-section="synthesis"] > div {
   flex: 1 1 100% !important;
+}
+
+.pdf-mode [data-section="pillar-detail"],
+.pdf-mode [data-section="synthesis"] > div {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
 }

@@ -28,23 +28,23 @@ export async function handler(event) {
   <div style="max-width:600px; margin:0 auto; padding:40px 24px;">
 
     <div style="text-align:center; margin-bottom:32px;">
-      <div style="font-size:12px; letter-spacing:4px; color:#E8A838; text-transform:uppercase; margin-bottom:8px;">Amarillo Search</div>
+      <div style="font-size:12px; letter-spacing:4px; color:#FECC02; text-transform:uppercase; margin-bottom:8px;">Amarillo Search</div>
       <h1 style="font-size:28px; color:#f0f0f0; margin:0 0 8px;">DSI Profile™</h1>
       <p style="color:#888; font-size:14px; margin:0;">Résultats de votre évaluation</p>
     </div>
 
-    <div style="background:rgba(232,168,56,0.08); border:1px solid rgba(232,168,56,0.2); border-left:4px solid #E8A838; border-radius:4px; padding:24px 28px; margin-bottom:24px;">
-      <h2 style="color:#E8A838; font-size:20px; margin:0 0 8px;">${profileType}</h2>
-      <p style="color:#aaa; font-size:14px; margin:0;">Score global : <strong style="color:#E8A838;">${globalScore} / 4.00</strong></p>
+    <div style="background:rgba(232,168,56,0.08); border:1px solid rgba(232,168,56,0.2); border-left:4px solid #FECC02; border-radius:4px; padding:24px 28px; margin-bottom:24px;">
+      <h2 style="color:#FECC02; font-size:20px; margin:0 0 8px;">${profileType}</h2>
+      <p style="color:#aaa; font-size:14px; margin:0;">Score global : <strong style="color:#FECC02;">${globalScore} / 4.00</strong></p>
     </div>
 
     <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:24px 28px; margin-bottom:24px;">
       <p style="color:#ccc; font-size:14px; margin:0 0 4px;">Candidat : <strong style="color:#f0f0f0;">${candidateName}</strong></p>
-      <p style="color:#ccc; font-size:14px; margin:0;">Code session : <strong style="color:#E8A838; letter-spacing:2px;">${resultsCode}</strong></p>
+      <p style="color:#ccc; font-size:14px; margin:0;">Code session : <strong style="color:#FECC02; letter-spacing:2px;">${resultsCode}</strong></p>
     </div>
 
     <div style="text-align:center; margin-bottom:32px;">
-      <a href="${siteUrl}" style="display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#E8A838,#D4912A); color:#0a0b0e; text-decoration:none; font-weight:700; font-size:14px; letter-spacing:1px; text-transform:uppercase; border-radius:4px;">
+      <a href="${siteUrl}" style="display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#FECC02,#E5B800); color:#0a0b0e; text-decoration:none; font-weight:700; font-size:14px; letter-spacing:1px; text-transform:uppercase; border-radius:4px;">
         Voir mes résultats complets
       </a>
       <p style="color:#666; font-size:12px; margin-top:12px;">Utilisez votre code <strong>${resultsCode}</strong> pour accéder à vos résultats détaillés.</p>

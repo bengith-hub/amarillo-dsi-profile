@@ -764,16 +764,14 @@ export default function App() {
     if (!resultsRef.current) return;
     const el = resultsRef.current;
     const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
-    // Add PDF mode class
     el.classList.add("pdf-mode");
-    // Hide interactive elements
     const hideEls = el.querySelectorAll("[data-pdf-hide], [data-pdf-hide-btns]");
     hideEls.forEach(e => e.style.display = "none");
     const footer = el.querySelector("[data-section='footer']");
     if (footer) footer.style.borderTop = "none";
-    // Use margin to create space for page numbers, html2canvas bg fills content area
+    // margin: 0 so html2canvas bg (#0a0b0e) fills entire page including empty areas
     const opt = {
-      margin: [16, 10, 12, 10],
+      margin: 0,
       filename: `DSI-Profile_${name}.pdf`,
       image: { type: "png" },
       html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 880 },
@@ -787,13 +785,6 @@ export default function App() {
       const totalPages = pdf.internal.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
-        // Fill margin areas with dark bg (top, bottom, left, right strips)
-        pdf.setFillColor(10, 11, 14);
-        pdf.rect(0, 0, pw, 16, "F"); // top margin
-        pdf.rect(0, ph - 12, pw, 12, "F"); // bottom margin
-        pdf.rect(0, 0, 10, ph, "F"); // left margin
-        pdf.rect(pw - 10, 0, 10, ph, "F"); // right margin
-        // Page number
         pdf.setFontSize(8);
         pdf.setTextColor(100, 100, 100);
         pdf.text(`${i} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });

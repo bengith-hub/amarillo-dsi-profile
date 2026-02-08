@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import html2pdf from "html2pdf.js";
 import amarilloLogoWhite from "./assets/amarillo-logo-white.png";
 
 // ============================================================
@@ -769,28 +768,58 @@ export default function App() {
     hideEls.forEach(e => e.style.display = "none");
     const footer = el.querySelector("[data-section='footer']");
     if (footer) footer.style.borderTop = "none";
-    // margin: 0 so html2canvas bg (#0a0b0e) fills entire page including empty areas
-    const opt = {
-      margin: 0,
-      filename: `DSI-Profile_${name}.pdf`,
-      image: { type: "png" },
-      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false, windowWidth: 880 },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-    };
-    const worker = html2pdf().set(opt).from(el);
-    await worker.toPdf().get("pdf").then((pdf) => {
-      const pw = pdf.internal.pageSize.getWidth();
-      const ph = pdf.internal.pageSize.getHeight();
-      const totalPages = pdf.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
+
+    try {
+      // Step 1: Capture element to canvas
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: "#0a0b0e",
+        useCORS: true,
+        logging: false,
+        width: 880,
+        windowWidth: 880,
+      });
+      const imgData = canvas.toDataURL("image/png");
+
+      // Step 2: Create PDF manually with dark bg on every page
+      const { jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pw = pdf.internal.pageSize.getWidth();   // 210mm
+      const ph = pdf.internal.pageSize.getHeight();   // 297mm
+      const mTop = 16, mRight = 10, mBottom = 14, mLeft = 10;
+      const contentW = pw - mLeft - mRight;           // usable width in mm
+      const contentH = ph - mTop - mBottom;           // usable height per page in mm
+
+      // Image dimensions in mm (based on canvas pixels → mm conversion)
+      const imgWmm = contentW;
+      const imgHmm = (canvas.height / canvas.width) * contentW;
+      const totalPages = Math.ceil(imgHmm / contentH);
+
+      for (let i = 0; i < totalPages; i++) {
+        if (i > 0) pdf.addPage();
+        // Paint full page dark
+        pdf.setFillColor(10, 11, 14);
+        pdf.rect(0, 0, pw, ph, "F");
+        // Place the full image offset so correct slice shows in content area
+        const yOffset = mTop - i * contentH;
+        // Clip to content area using save/restore
+        pdf.saveGraphicsState();
+        // Rectangular clip path for content area
+        pdf.rect(mLeft, mTop, contentW, contentH);
+        pdf.clip();
+        pdf.addImage(imgData, "PNG", mLeft, yOffset, imgWmm, imgHmm);
+        pdf.restoreGraphicsState();
+        // Page number
         pdf.setFontSize(8);
         pdf.setTextColor(100, 100, 100);
-        pdf.text(`${i} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
+        pdf.text(`${i + 1} / ${totalPages}`, pw / 2, ph - 4, { align: "center" });
       }
-    }).save();
-    // Restore
+      pdf.save(`DSI-Profile_${name}.pdf`);
+    } catch (err) {
+      console.error("PDF generation error:", err);
+    }
+
     el.classList.remove("pdf-mode");
     hideEls.forEach(e => e.style.display = "");
     if (footer) footer.style.borderTop = "";

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import html2pdf from "html2pdf.js";
-import amarilloLogo from "./assets/amarillo-logo.png";
 import amarilloLogoWhite from "./assets/amarillo-logo-white.png";
 
 // ============================================================
@@ -717,15 +716,27 @@ export default function App() {
     if (!resultsRef.current) return;
     const el = resultsRef.current;
     const name = currentSession?.candidateName?.replace(/\s+/g, "_") || "Candidat";
+    // Temporarily force background color for PDF capture
+    const origBg = el.style.background;
+    el.style.background = "#0a0b0e";
+    // Hide email section and footer buttons during PDF capture
+    const emailSection = el.querySelector("[data-pdf-hide]");
+    const footerBtns = el.querySelector("[data-pdf-hide-btns]");
+    if (emailSection) emailSection.style.display = "none";
+    if (footerBtns) footerBtns.style.display = "none";
     const opt = {
-      margin: [10, 10, 10, 10],
+      margin: [8, 8, 8, 8],
       filename: `DSI-Profile_${name}.pdf`,
-      image: { type: "jpeg", quality: 0.95 },
-      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true },
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2, backgroundColor: "#0a0b0e", useCORS: true, logging: false },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       pagebreak: { mode: ["avoid-all", "css", "legacy"] },
     };
     await html2pdf().set(opt).from(el).save();
+    // Restore
+    el.style.background = origBg;
+    if (emailSection) emailSection.style.display = "";
+    if (footerBtns) footerBtns.style.display = "";
   };
 
   const handleSendEmail = async () => {
@@ -777,13 +788,13 @@ export default function App() {
       {/* ===== HOME ===== */}
       {view === "home" && (
         <div style={{ maxWidth: 600, margin: "0 auto", padding: "60px 24px", textAlign: "center", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ marginBottom: 24, alignSelf: "center" }}>
-            <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 60, objectFit: "contain" }} />
+          <div style={{ marginBottom: 32, alignSelf: "center" }}>
+            <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(220px, 50vw, 340px)", objectFit: "contain", display: "block" }} />
           </div>
-          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 16, background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+          <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 12, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             DSI Profile™
           </h1>
-          <p style={{ color: "#888", fontSize: 16, marginBottom: 48, lineHeight: 1.6 }}>
+          <p style={{ color: "#888", fontSize: 15, marginBottom: 48, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}>
             Assessment comportemental pour Directeurs des Systèmes d'Information
           </p>
 
@@ -811,7 +822,7 @@ export default function App() {
       {/* ===== ADMIN LOGIN ===== */}
       {view === "adminLogin" && (
         <div style={{ maxWidth: 400, margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
-          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, marginBottom: 32, color: "#E8A838" }}>Administration</h2>
+          <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, marginBottom: 32, color: "#E8A838" }}>Administration</h2>
           <div style={{ ...box, padding: 32 }}>
             <label style={{ display: "block", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>Mot de passe</label>
             <div style={{ position: "relative", marginBottom: 16 }}>
@@ -843,7 +854,7 @@ export default function App() {
       {view === "admin" && (
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
-            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, color: "#E8A838", margin: 0 }}>Administration</h2>
+            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#E8A838", margin: 0 }}>Administration</h2>
             <button onClick={() => { setView("home"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
           </div>
 
@@ -949,7 +960,7 @@ export default function App() {
                 <span style={{ fontSize: 12, color: "#666" }}>›</span>
                 <span style={{ fontSize: 13, color: dim.color }}>{dim.icon} {dim.name}</span>
               </div>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 32, color: "#f0f0f0" }}>{q.text}</h2>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 32, color: "#f0f0f0" }}>{q.text}</h2>
               <RankingCard key={`${currentQ}-${q.dim}`} question={q} dimColor={dim.color} onComplete={handleRankComplete} />
             </div>
             <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`}</style>
@@ -964,11 +975,11 @@ export default function App() {
         return (
           <div ref={resultsRef} style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px" }}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
-              <div style={{ marginBottom: 20 }}>
-                <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 44, objectFit: "contain", marginBottom: 12, display: "block", margin: "0 auto 12px" }} />
-                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A838", textTransform: "uppercase" }}>Rapport d'évaluation</span>
+              <div style={{ marginBottom: 24 }}>
+                <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(180px, 40vw, 280px)", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
+                <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 12, letterSpacing: 4, color: "#E8A838", textTransform: "uppercase", fontWeight: 500 }}>Rapport d'évaluation</span>
               </div>
-              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
+              <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 700, marginBottom: 8, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #E8A838, #f0d090, #E8A838)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentSession.candidateName}</h1>
               <p style={{ color: "#888", fontSize: 15 }}>
                 {currentSession.candidateRole || "DSI"} · {FORMATS[currentSession.format]?.label} · {new Date(currentSession.createdAt).toLocaleDateString("fr-FR")}
                 {currentSession.totalTimeMs > 0 && ` · Temps : ${formatTime(currentSession.totalTimeMs)}`}
@@ -976,7 +987,7 @@ export default function App() {
             </div>
 
             <div style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderLeft: "4px solid #E8A838", borderRadius: 2 }}>
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, marginBottom: 8, color: "#E8A838" }}>{analysis.profile}</h2>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 8, color: "#E8A838" }}>{analysis.profile}</h2>
               <p style={{ color: "#aaa", lineHeight: 1.7, fontSize: 15 }}>{analysis.description}</p>
               <div style={{ display: "inline-block", marginTop: 16, padding: "6px 16px", background: "rgba(232,168,56,0.1)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#E8A838" }}>
                 Score global : {analysis.avg.toFixed(2)} / 4.00
@@ -992,7 +1003,7 @@ export default function App() {
               {PILLARS.map((p, i) => (
                 <div key={i} style={{ padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
+                  <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
                   <div style={{ fontSize: 12, color: "#666" }}>/4.00</div>
                 </div>
               ))}
@@ -1025,7 +1036,7 @@ export default function App() {
             </div>
 
             {/* --- Email section --- */}
-            <div style={{ ...box, padding: 32, marginBottom: 40 }}>
+            <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40 }}>
               <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 16 }}>Recevoir vos résultats par email</h3>
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <input type="email" value={candidateEmail} onChange={(e) => setCandidateEmail(e.target.value)} placeholder="votre@email.com"
@@ -1042,10 +1053,10 @@ export default function App() {
 
             {/* --- Footer --- */}
             <div style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-              <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ height: 32, objectFit: "contain", marginBottom: 12, opacity: 0.6 }} />
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8 }}>DSI Profile™</div>
+              <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: 140, objectFit: "contain", marginBottom: 12, opacity: 0.5, display: "block", margin: "0 auto 12px" }} />
+              <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 11, letterSpacing: 4, color: "#E8A83888", textTransform: "uppercase", marginBottom: 8, fontWeight: 500 }}>DSI Profile™</div>
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
-              <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+              <div data-pdf-hide-btns="true" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#E8A838", borderColor: "#E8A83855" }}>
                   📄 Télécharger PDF
                 </button>

@@ -516,31 +516,15 @@ export default function App() {
             Plateforme d'évaluations comportementales
           </p>
 
-          {/* Assessment cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16, marginBottom: 40, textAlign: "left" }}>
-            {Object.values(ASSESSMENTS).map((assmt) => (
-              <div key={assmt.id}
-                style={{ ...box, padding: 28, cursor: "default", transition: "all 0.2s ease", borderLeft: "3px solid #FECC02" }}
-              >
-                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: "#FECC02", marginBottom: 8 }}>
-                  {assmt.label}
-                </div>
-                <div style={{ fontSize: 13, color: "#888", lineHeight: 1.5, marginBottom: 12 }}>
-                  {assmt.subtitle}
-                </div>
-                <div style={{ fontSize: 11, color: "#666", fontFamily: "'DM Mono', monospace" }}>
-                  {assmt.dimensions.length} dimensions · {assmt.pillars.length} piliers · {Object.keys(assmt.formats).length} formats
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Resume code input */}
-          <div style={{ ...box, padding: 32, marginBottom: 24, textAlign: "left" }}>
-            <label style={{ display: "block", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>
-              Reprendre une évaluation
+          {/* Main action: start or resume */}
+          <div style={{ ...box, padding: "40px 36px", marginBottom: 24, textAlign: "center", borderTop: "2px solid #FECC02" }}>
+            <label style={{ display: "block", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 6, fontFamily: "'DM Mono', monospace", fontWeight: 500 }}>
+              Commencer ou reprendre une évaluation
             </label>
-            <div style={{ display: "flex", gap: 12 }}>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 20, fontFamily: "'DM Sans', sans-serif" }}>
+              Entrez votre code d'accès pour accéder à votre session
+            </p>
+            <div style={{ display: "flex", gap: 12, maxWidth: 400, margin: "0 auto" }}>
               <input type="text" value={resumeCode} onChange={(e) => setResumeCode(e.target.value.toUpperCase())} placeholder="AMA-XXXX" maxLength={8}
                 style={{ ...input, flex: 1, fontFamily: "'DM Mono', monospace", letterSpacing: 3, textAlign: "center", fontSize: 20 }}
                 onKeyDown={(e) => e.key === "Enter" && handleResume()} />

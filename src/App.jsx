@@ -175,7 +175,7 @@ function RadarChart({ scores, dimensions, size = 440 }) {
     <svg viewBox={`0 0 ${vw} ${vw}`} style={{ width: "100%", maxWidth: vw, display: "block", margin: "0 auto" }}>
       {[1,2,3,4].map(l => <polygon key={l} data-radar="grid" points={dimensions.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />)}
       {dimensions.map((d,i) => { const p=pt(i,4); return <line key={d.id} data-radar="radial" x1={c} y1={c} x2={p.x} y2={p.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />; })}
-      <polygon data-radar="area" points={dimensions.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(232,168,56,0.15)" stroke="#FECC02" strokeWidth="2.5" />
+      <polygon data-radar="area" points={dimensions.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")} fill="rgba(254,204,2,0.15)" stroke="#FECC02" strokeWidth="2.5" />
       {dimensions.map((d,i) => { const p=pt(i,scores[d.id]||0); return <circle key={d.id} data-radar="dot" cx={p.x} cy={p.y} r="5" fill={d.color} stroke="#fff" strokeWidth="1.5" />; })}
       {dimensions.map((d,i) => { const p=pt(i,4.9); const a=(360*i)/n-90; const isR=a>-90&&a<90; const isB=a>0&&a<180; return <text key={d.id} data-radar="label" x={p.x} y={p.y} textAnchor={Math.abs(a+90)<10||Math.abs(a-90)<10?"middle":isR?"start":"end"} dominantBaseline={isB?"hanging":"auto"} fill="#999" fontSize="11" fontFamily="'DM Sans', sans-serif">{d.icon} {d.name}</text>; })}
     </svg>
@@ -592,7 +592,7 @@ export default function App() {
                     <button key={assmt.id} onClick={() => setAdminAssessmentType(assmt.id)}
                       style={{
                         flex: 1, padding: "14px 12px", textAlign: "center", borderRadius: 2, cursor: "pointer",
-                        background: adminAssessmentType === assmt.id ? "rgba(232,168,56,0.12)" : "rgba(255,255,255,0.03)",
+                        background: adminAssessmentType === assmt.id ? "rgba(254,204,2,0.12)" : "rgba(255,255,255,0.03)",
                         border: `1px solid ${adminAssessmentType === assmt.id ? "#FECC02" : "rgba(255,255,255,0.08)"}`,
                         color: adminAssessmentType === assmt.id ? "#FECC02" : "#888",
                       }}>
@@ -620,7 +620,7 @@ export default function App() {
                 <button key={key} onClick={() => setNewFormat(key)}
                   style={{
                     flex: 1, padding: "16px 12px", textAlign: "center", borderRadius: 2, cursor: "pointer",
-                    background: newFormat === key ? "rgba(232,168,56,0.12)" : "rgba(255,255,255,0.03)",
+                    background: newFormat === key ? "rgba(254,204,2,0.12)" : "rgba(255,255,255,0.03)",
                     border: `1px solid ${newFormat === key ? "#FECC02" : "rgba(255,255,255,0.08)"}`,
                     color: newFormat === key ? "#FECC02" : "#888",
                   }}>
@@ -784,7 +784,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.15)", borderRadius: 2 }}>
+              <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(254,204,2,0.04)", border: "1px solid rgba(254,204,2,0.15)", borderRadius: 2 }}>
                 <h3 data-section-header="yellow" style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 16 }}>Axes de développement</h3>
                 {analysis.bottom3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>

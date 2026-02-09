@@ -32,12 +32,40 @@ function generateCode() {
 }
 
 function selectQuestions(format, assessment) {
-  const perDim = assessment.formats[format].questionsPerDim;
+  const fmt = assessment.formats[format];
+  const perDim = fmt.questionsPerDim;
   const selected = [];
+
+  // 1. Standard dimension questions
   assessment.dimensions.forEach((dim) => {
     const dimQs = assessment.questions.filter((q) => q.dim === dim.id).sort((a, b) => a.order - b.order);
     selected.push(...dimQs.slice(0, perDim));
   });
+
+  // 2. Mirror questions (for coherence index)
+  if (assessment.mirrorQuestions) {
+    const mirrorCount = fmt.mirrorCount || 0;
+    const mirrors = [...assessment.mirrorQuestions];
+    // Shuffle then take mirrorCount
+    for (let i = mirrors.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [mirrors[i], mirrors[j]] = [mirrors[j], mirrors[i]];
+    }
+    selected.push(...mirrors.slice(0, mirrorCount));
+  }
+
+  // 3. Desirability questions (for social desirability scale)
+  if (assessment.desirabilityQuestions) {
+    const desCount = fmt.desirabilityCount || 0;
+    const desQs = [...assessment.desirabilityQuestions];
+    for (let i = desQs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [desQs[i], desQs[j]] = [desQs[j], desQs[i]];
+    }
+    selected.push(...desQs.slice(0, desCount));
+  }
+
+  // 4. Shuffle all questions together
   for (let i = selected.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [selected[i], selected[j]] = [selected[j], selected[i]];
@@ -228,11 +256,69 @@ function getAnalysis(scores, assessment) {
   };
 }
 
+function computeReliability(session, assessment) {
+  if (!session || !assessment.mirrorPairs) return null;
+  const answers = session.answers || {};
+  const config = assessment.reliabilityConfig || {};
+  const sessionQuestions = session.questions || [];
+
+  // Build a map: for each dim, track the order of questions as they appeared in the session
+  // This lets us find which answer index corresponds to a specific question order
+  const dimOrderMap = {};
+  sessionQuestions.forEach((q) => {
+    if (!dimOrderMap[q.dim]) dimOrderMap[q.dim] = [];
+    dimOrderMap[q.dim].push(q.order);
+  });
+
+  // --- Coherence index ---
+  const threshold = config.coherenceThreshold || 1.5;
+  const pairs = assessment.mirrorPairs.map(pair => {
+    const originalScores = answers[pair.originalDim] || [];
+    const mirrorScores = answers[pair.mirrorDim] || [];
+    // Find the answer index for the original question with the matching order
+    const orderList = dimOrderMap[pair.originalDim] || [];
+    const origIdx = orderList.indexOf(pair.originalOrder);
+    const origScore = origIdx >= 0 ? originalScores[origIdx] : undefined;
+    const mirrorScore = mirrorScores.length > 0 ? mirrorScores[0] : undefined;
+    if (origScore === undefined || mirrorScore === undefined) return null;
+    const gap = Math.abs(origScore - mirrorScore);
+    return { ...pair, origScore, mirrorScore, gap, coherent: gap <= threshold };
+  }).filter(Boolean);
+
+  const coherentCount = pairs.filter(p => p.coherent).length;
+  const coherenceIndex = pairs.length > 0 ? Math.round((coherentCount / pairs.length) * 100) : null;
+  const coherenceLevel = coherenceIndex !== null
+    ? (config.coherenceLevels || []).find(l => coherenceIndex >= l.min) || { label: "—", color: "#888" }
+    : { label: "—", color: "#888" };
+
+  // --- Desirability score ---
+  const desScores = answers.desirability || [];
+  const desirabilityRaw = desScores.length > 0
+    ? desScores.reduce((a, b) => a + b, 0) / desScores.length
+    : null;
+  // Invert: high raw score = low desirability (sincere), low raw score = high desirability
+  // score 1 = picked the "too perfect" answer first → high desirability
+  // score 4 = picked the honest/vulnerable answer first → low desirability
+  // Normalize: (4 - avg) / 3 * 100 → 0% = perfectly sincere, 100% = max desirability
+  const desirabilityScore = desirabilityRaw !== null
+    ? Math.round(Math.max(0, Math.min(100, ((4 - desirabilityRaw) / 3) * 100)))
+    : null;
+  const desirabilityLevel = desirabilityScore !== null
+    ? (config.desirabilityLevels || []).find(l => desirabilityScore <= l.max) || { label: "—", color: "#888" }
+    : { label: "—", color: "#888" };
+
+  return {
+    coherenceIndex, coherencePairs: pairs, coherenceLevel,
+    desirabilityScore, desirabilityLevel,
+  };
+}
+
 // ============================================================
 // MAIN APP
 // ============================================================
 export default function App() {
   const [view, setView] = useState("landing");
+  const [isAdminView, setIsAdminView] = useState(false);
   const [adminAssessmentType, setAdminAssessmentType] = useState(DEFAULT_ASSESSMENT);
   const [adminPwd, setAdminPwd] = useState("");
   const [sessions, setSessions] = useState([]);
@@ -293,7 +379,7 @@ export default function App() {
     const session = await loadSession(code);
     setLoading(false);
     if (!session) { setResumeError("Code introuvable. Vérifiez et réessayez."); return; }
-    if (session.status === "completed") { setCurrentSession(session); setView("results"); return; }
+    if (session.status === "completed") { setCurrentSession(session); setIsAdminView(false); setView("results"); return; }
     startQuiz(session);
   };
 
@@ -312,7 +398,7 @@ export default function App() {
     if (nextQ % 5 === 0 || isLast) await saveSession(updated);
 
     setTimeout(() => {
-      if (isLast) { setView("results"); }
+      if (isLast) { setIsAdminView(false); setView("results"); }
       else { setCurrentQ(nextQ); }
     }, 300);
   };
@@ -680,7 +766,7 @@ export default function App() {
                       {statusLabels[s.status]}
                     </span>
                     {s.status === "completed" && (
-                      <button onClick={async () => { const full = await loadSession(s.code); if (full) { setCurrentSession(full); setView("results"); } }}
+                      <button onClick={async () => { const full = await loadSession(s.code); if (full) { setCurrentSession(full); setIsAdminView(true); setView("results"); } }}
                         style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#52B788", borderColor: "#52B78844" }}>
                         Voir résultats
                       </button>
@@ -709,8 +795,13 @@ export default function App() {
       {/* ===== QUIZ ===== */}
       {view === "quiz" && questions.length > 0 && currentQ < questions.length && (() => {
         const q = questions[currentQ];
-        const dim = currentAssessment.dimensions.find((d) => d.id === q.dim);
-        const pillar = currentAssessment.pillars[dim.pillar];
+        // Mirror questions: show the original dimension they mirror
+        // Desirability questions: show a neutral "Posture managériale" label
+        const isMirror = q.dim.startsWith("mirror_");
+        const isDesirability = q.dim === "desirability";
+        const dimId = isMirror ? q.mirrorOf?.dim : q.dim;
+        const dim = currentAssessment.dimensions.find((d) => d.id === dimId) || { name: "Posture Managériale", icon: "🎭", color: "#888", pillar: 0 };
+        const pillar = isDesirability ? { name: "Posture & Authenticité", color: "#888" } : currentAssessment.pillars[dim.pillar];
         const fmt = currentAssessment.formats[currentSession.format];
         return (
           <div style={{ maxWidth: 750, margin: "0 auto", padding: "40px 24px" }}>
@@ -749,6 +840,7 @@ export default function App() {
       {view === "results" && currentSession && (() => {
         const scores = computeScores();
         const analysis = getAnalysis(scores, currentAssessment);
+        const reliability = computeReliability(currentSession, currentAssessment);
         return (
           <div ref={resultsRef} data-pdf-container style={{ maxWidth: 900, margin: "0 auto", padding: "40px 24px", background: "#0a0b0e" }}>
             <div style={{ textAlign: "center", marginBottom: 48 }}>
@@ -843,6 +935,72 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* --- Reliability indicators (admin-only) --- */}
+            {isAdminView && reliability && (
+              <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: "4px solid #888" }}>
+                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>Indicateurs de fiabilité</h3>
+                <p style={{ fontSize: 11, color: "#555", marginBottom: 24, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur</p>
+
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 24 }}>
+                  {/* Coherence index */}
+                  <div style={{ flex: "1 1 280px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: "#ccc" }}>Indice de cohérence</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, color: reliability.coherenceLevel.color }}>
+                        {reliability.coherenceIndex !== null ? `${reliability.coherenceIndex}%` : "—"}
+                      </span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                      <div style={{ height: "100%", borderRadius: 4, width: `${reliability.coherenceIndex || 0}%`, background: reliability.coherenceLevel.color, transition: "width 1s ease" }} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${reliability.coherenceLevel.color}22`, color: reliability.coherenceLevel.color, fontFamily: "'DM Mono', monospace" }}>
+                        {reliability.coherenceIndex >= 70 ? "✓" : reliability.coherenceIndex >= 50 ? "⚠" : "🚨"} {reliability.coherenceLevel.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#555" }}>
+                        {reliability.coherencePairs.filter(p => p.coherent).length}/{reliability.coherencePairs.length} paires cohérentes
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Desirability score */}
+                  <div style={{ flex: "1 1 280px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: "#ccc" }}>Désirabilité sociale</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, color: reliability.desirabilityLevel.color }}>
+                        {reliability.desirabilityScore !== null ? `${reliability.desirabilityScore}%` : "—"}
+                      </span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                      <div style={{ height: "100%", borderRadius: 4, width: `${reliability.desirabilityScore || 0}%`, background: reliability.desirabilityLevel.color, transition: "width 1s ease" }} />
+                    </div>
+                    <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${reliability.desirabilityLevel.color}22`, color: reliability.desirabilityLevel.color, fontFamily: "'DM Mono', monospace" }}>
+                      {reliability.desirabilityScore <= 50 ? "✓" : reliability.desirabilityScore <= 75 ? "⚠" : "🚨"} {reliability.desirabilityLevel.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Detail: coherence pairs */}
+                <details style={{ marginTop: 8 }}>
+                  <summary style={{ fontSize: 12, color: "#666", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>Détail des paires miroir</summary>
+                  <div style={{ marginTop: 12 }}>
+                    {reliability.coherencePairs.map((pair, i) => {
+                      const origDim = currentAssessment.dimensions.find(d => d.id === pair.originalDim);
+                      return (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", marginBottom: 4, background: pair.coherent ? "rgba(82,183,136,0.05)" : "rgba(231,76,60,0.08)", border: `1px solid ${pair.coherent ? "rgba(82,183,136,0.15)" : "rgba(231,76,60,0.2)"}`, borderRadius: 2, fontSize: 12 }}>
+                          <span style={{ color: "#aaa" }}>{origDim?.icon} {origDim?.name}</span>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                            <span style={{ fontFamily: "'DM Mono', monospace", color: "#888" }}>{pair.origScore.toFixed(2)} → {pair.mirrorScore.toFixed(2)}</span>
+                            <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700, color: pair.coherent ? "#52B788" : "#e74c3c" }}>Δ {pair.gap.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              </div>
+            )}
 
             {/* --- Email section --- */}
             <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40 }}>

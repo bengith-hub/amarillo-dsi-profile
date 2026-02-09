@@ -3,6 +3,8 @@
 // All DSI-specific data: dimensions, pillars, questions, profiles
 // ============================================================
 
+import methodology from "./methodology";
+
 const dsi = {
   id: "dsi",
   label: "DSI Profile™",
@@ -33,9 +35,9 @@ const dsi = {
   ],
 
   formats: {
-    court: { label: "Court", questionsPerDim: 3, total: 36, duration: "~15 min" },
-    standard: { label: "Standard", questionsPerDim: 4, total: 48, duration: "~20 min" },
-    complet: { label: "Complet", questionsPerDim: 5, total: 60, duration: "~25 min" },
+    court: { label: "Court", questionsPerDim: 3, total: 36, mirrorCount: 4, desirabilityCount: 2, duration: "~17 min" },
+    standard: { label: "Standard", questionsPerDim: 4, total: 48, mirrorCount: 6, desirabilityCount: 4, duration: "~24 min" },
+    complet: { label: "Complet", questionsPerDim: 5, total: 60, mirrorCount: 6, desirabilityCount: 4, duration: "~29 min" },
   },
 
   // 8 profiles ordered by priority (first match wins)
@@ -116,31 +118,33 @@ const dsi = {
     },
   ],
 
-  methodology: {
-    title: "Méthodologie DSI Profile™",
-    sections: [
-      {
-        heading: "Fondements théoriques",
-        content: "Le DSI Profile™ repose sur trois cadres théoriques complémentaires adaptés au contexte spécifique du leadership IT. Le Competing Values Framework (Quinn & Rohrbaugh, 1983) fournit la structure de base : les trois piliers de l'évaluation — Leadership & Influence, Excellence Opérationnelle, Innovation & Posture — correspondent aux tensions fondamentales entre orientation interne/externe et stabilité/flexibilité, transposées au rôle de DSI. La théorie du leadership transformationnel (Bass & Avolio, 1994) informe le pilier Leadership, en évaluant la capacité du DSI à articuler une vision, stimuler intellectuellement ses équipes et exercer une influence au-delà de son périmètre hiérarchique. Les modèles de maturité de la gouvernance IT (COBIT 2019, CMMI) structurent le pilier Excellence Opérationnelle, permettant de situer le DSI sur un continuum allant de la gestion réactive à l'optimisation proactive. Les 12 dimensions d'évaluation déclinent ces trois piliers en compétences observables et mesurables, couvrant l'intégralité du spectre d'action d'un DSI contemporain."
-      },
-      {
-        heading: "Structure de l'évaluation",
-        content: "L'évaluation s'organise autour de 12 dimensions regroupées en 3 piliers. Le pilier Leadership & Influence comprend : Vision Stratégique IT, Leadership d'Équipe, Conduite du Changement et Influence COMEX. Le pilier Excellence Opérationnelle couvre : Pilotage Budgétaire & ROI, Gestion des Risques & Cyber, Maîtrise de la Complexité et Orientation Résultats. Le pilier Innovation & Posture englobe : Innovation & Veille Tech, Orientation Client/Métier, Résilience & Gestion du Stress et Agilité & Adaptabilité. Chaque dimension est évaluée à travers des questions de jugement situationnel (Situational Judgment Test — SJT), format reconnu pour sa validité prédictive en évaluation managériale. Trois formats sont proposés selon le contexte d'utilisation : Court (36 questions, 3 par dimension, ~15 min), Standard (48 questions, 4 par dimension, ~20 min) et Complet (60 questions, 5 par dimension, ~25 min). Pour chaque question, le candidat ordonne 4 options de la plus à la moins représentative de son approche (évaluation ipsative à choix forcé)."
-      },
-      {
-        heading: "Méthode de scoring",
-        content: "Le scoring s'appuie sur un système de pondération par rang : la réponse classée 1re reçoit un coefficient de 1.0, la 2e de 0.66, la 3e de 0.33 et la 4e de 0.0. Ces coefficients sont appliqués à la valeur calibrée de chaque option, qui reflète le niveau de maturité managériale de la réponse dans son contexte situationnel. Les valeurs calibrées des options ne suivent pas systématiquement un ordre linéaire : elles intègrent une calibration non linéaire destinée à réduire le biais de désirabilité sociale. Ainsi, l'option paraissant la plus ambitieuse ou idéaliste n'est pas toujours celle qui obtient la valeur la plus élevée — les réponses pragmatiques et équilibrées peuvent être valorisées davantage que les postures grandioses. Le score de chaque dimension est obtenu par la moyenne des scores pondérés sur l'ensemble des questions de cette dimension. Le score de chaque pilier est dérivé de la moyenne de ses dimensions constitutives, offrant une vue consolidée des grands axes de compétence."
-      },
-      {
-        heading: "Profilage",
-        content: "L'identification du profil repose sur un système de scoring pondéré par pilier. Huit profils archétypaux sont définis, chacun caractérisé par un vecteur de pondération qui exprime l'importance relative de chaque pilier dans la signature du profil. Par exemple, le profil Visionnaire pondère fortement Leadership et Innovation, tandis que le profil Bâtisseur met l'accent sur l'Excellence Opérationnelle. Le score de correspondance d'un candidat pour chaque profil est calculé comme la somme pondérée de ses scores de pilier. Un seuil minimal de score pondéré (minScore) garantit que seuls les candidats présentant un niveau de maturité suffisant accèdent aux profils supérieurs. Le candidat reçoit un pourcentage de correspondance pour ses profils les mieux classés, permettant une lecture nuancée qui dépasse la classification binaire. Cette approche reflète la réalité des profils de DSI, qui combinent généralement plusieurs dominantes à des degrés variables."
-      },
-      {
-        heading: "Validité et limites",
-        content: "Les tests de jugement situationnel (SJT) constituent un format d'évaluation dont la validité prédictive pour le potentiel de leadership est bien documentée dans la littérature scientifique (Weekley & Ployhart, 2006 ; McDaniel et al., 2007). Le format ipsatif à choix forcé réduit significativement les biais d'acquiescement et de désirabilité sociale, fréquents dans les auto-évaluations managériales. La calibration non linéaire des scores renforce cette résistance au gaming en rendant la « bonne réponse » moins prédictible. Limites à considérer : (1) l'évaluation repose sur du déclaratif et reflète la représentation que le candidat a de ses pratiques, non les pratiques observées en situation réelle ; (2) les scénarios et les valeurs de calibration sont ancrés dans le contexte du management IT en environnement corporate français et européen, ce qui peut limiter la transférabilité interculturelle ; (3) le DSI Profile™ est un instrument de développement professionnel et d'aide au recrutement, non un outil psychométrique clinique — il ne se substitue pas à une évaluation approfondie par un psychologue du travail dans les contextes qui l'exigent."
-      },
+  methodology,
+
+  // Reliability configuration: coherence index + social desirability
+  reliabilityConfig: {
+    coherenceThreshold: 1.5,  // max acceptable gap between mirror pairs (on 0-4 scale)
+    desirabilityLevels: [
+      { max: 50, label: "Sincère", color: "#52B788" },
+      { max: 75, label: "Tendance à embellir", color: "#FECC02" },
+      { max: 100, label: "Forte désirabilité sociale", color: "#e74c3c" },
+    ],
+    coherenceLevels: [
+      { min: 70, label: "Fiable", color: "#52B788" },
+      { min: 50, label: "À vérifier", color: "#FECC02" },
+      { min: 0, label: "Incohérent", color: "#e74c3c" },
     ],
   },
+
+  // Mirror pairs: each entry links a mirror question to its original
+  // mirrorDim is the key used in session.answers for storing mirror scores
+  mirrorPairs: [
+    { mirrorDim: "mirror_vision", originalDim: "vision", originalOrder: 1 },
+    { mirrorDim: "mirror_leadership", originalDim: "leadership", originalOrder: 2 },
+    { mirrorDim: "mirror_change", originalDim: "change", originalOrder: 3 },
+    { mirrorDim: "mirror_influence", originalDim: "influence", originalOrder: 1 },
+    { mirrorDim: "mirror_budget", originalDim: "budget", originalOrder: 3 },
+    { mirrorDim: "mirror_resilience", originalDim: "resilience", originalOrder: 3 },
+  ],
 
   // 60 questions (5 per dimension)
   // Score calibration: non-linear scoring to reduce social desirability bias
@@ -552,6 +556,87 @@ const dsi = {
       { id: "b", text: "Ajustement quand les indicateurs sont clairement négatifs", score: 2 },
       { id: "c", text: "Checkpoints réguliers avec critères de pivot prédéfinis", score: 4 },
       { id: "d", text: "Mentalité d'expérimentation où le pivot est naturel", score: 3 },
+    ]},
+  ],
+
+  // =============================================
+  // QUESTIONS MIROIR (cohérence)
+  // Reformulations de questions existantes — stockées sous mirrorDim
+  // =============================================
+  mirrorQuestions: [
+    // Miroir de vision order:1 (schéma directeur SI)
+    { dim: "mirror_vision", mirrorOf: { dim: "vision", order: 1 }, order: 1, text: "Quand vous définissez les grandes orientations SI à 3 ans, votre priorité est :", options: [
+      { id: "a", text: "Préserver la fiabilité des systèmes en place", score: 1 },
+      { id: "b", text: "Réduire les coûts de fonctionnement du SI", score: 2 },
+      { id: "c", text: "Synchroniser la roadmap IT avec le plan stratégique de l'entreprise", score: 4 },
+      { id: "d", text: "Identifier des leviers technologiques pour différencier l'entreprise", score: 3 },
+    ]},
+    // Miroir de leadership order:2 (conflit entre managers)
+    { dim: "mirror_leadership", mirrorOf: { dim: "leadership", order: 2 }, order: 1, text: "Deux responsables de votre équipe sont en désaccord sur l'allocation des ressources :", options: [
+      { id: "a", text: "Vous imposez votre arbitrage pour ne pas perdre de temps", score: 1 },
+      { id: "b", text: "Vous écoutez chacun séparément pour comprendre les positions", score: 2 },
+      { id: "c", text: "Vous organisez une médiation pour co-construire un compromis", score: 4 },
+      { id: "d", text: "Vous en profitez pour revoir les règles de gouvernance de l'équipe", score: 3 },
+    ]},
+    // Miroir de change order:3 (levier transformation digitale)
+    { dim: "mirror_change", mirrorOf: { dim: "change", order: 3 }, order: 1, text: "Pour garantir le succès d'un programme de transformation, vous misez avant tout sur :", options: [
+      { id: "a", text: "La qualité des solutions techniques déployées", score: 1 },
+      { id: "b", text: "L'implication de la Direction Générale comme sponsor", score: 3 },
+      { id: "c", text: "La mobilisation des managers comme relais terrain", score: 4 },
+      { id: "d", text: "Un environnement qui tolère les erreurs et favorise l'itération", score: 2 },
+    ]},
+    // Miroir de influence order:1 (présentation COMEX)
+    { dim: "mirror_influence", mirrorOf: { dim: "influence", order: 1 }, order: 1, text: "Vous présentez un investissement IT majeur au Board. Votre angle d'attaque :", options: [
+      { id: "a", text: "L'architecture technique et les choix technologiques", score: 1 },
+      { id: "b", text: "Le calendrier, l'enveloppe budgétaire et les risques identifiés", score: 2 },
+      { id: "c", text: "L'impact attendu sur les indicateurs business clés", score: 4 },
+      { id: "d", text: "La transformation de l'avantage concurrentiel de l'entreprise", score: 3 },
+    ]},
+    // Miroir de budget order:3 (réduction budget 15%)
+    { dim: "mirror_budget", mirrorOf: { dim: "budget", order: 3 }, order: 1, text: "Contrainte budgétaire imprévue : vous devez réduire vos dépenses IT de 20% :", options: [
+      { id: "a", text: "Réduction proportionnelle sur chaque ligne budgétaire", score: 1 },
+      { id: "b", text: "Report des projets les moins avancés", score: 2 },
+      { id: "c", text: "Repriorisation du portefeuille par contribution business", score: 3 },
+      { id: "d", text: "Présentation au COMEX des scénarios de coupe avec impacts chiffrés", score: 4 },
+    ]},
+    // Miroir de resilience order:3 (pression COMEX projet irréaliste)
+    { dim: "mirror_resilience", mirrorOf: { dim: "resilience", order: 3 }, order: 1, text: "La Direction Générale exige un délai irréaliste pour un projet critique :", options: [
+      { id: "a", text: "Vous acceptez et demandez à vos équipes de redoubler d'efforts", score: 1 },
+      { id: "b", text: "Vous signalez les risques tout en vous engageant sur un planning tendu", score: 2 },
+      { id: "c", text: "Vous proposez un périmètre réduit avec des points de contrôle réguliers", score: 4 },
+      { id: "d", text: "Vous recadrez les attentes et proposez une approche itérative rapide", score: 3 },
+    ]},
+  ],
+
+  // =============================================
+  // QUESTIONS DÉSIRABILITÉ SOCIALE
+  // Questions où la réponse "parfaite" est volontairement transparente
+  // Score élevé = réponse socialement désirable choisie en 1er
+  // =============================================
+  desirabilityQuestions: [
+    { dim: "desirability", order: 1, text: "Honnêtement, quand un projet que vous portez rencontre des difficultés majeures :", options: [
+      { id: "a", text: "Il m'arrive de minimiser les problèmes dans mes reportings", score: 4 },
+      { id: "b", text: "Je partage une vision réaliste, même si elle est inconfortable", score: 2 },
+      { id: "c", text: "Je suis toujours 100% transparent sur toutes les difficultés dès le premier jour", score: 1 },
+      { id: "d", text: "J'adapte le niveau de détail selon l'interlocuteur et le moment", score: 3 },
+    ]},
+    { dim: "desirability", order: 2, text: "Concernant vos erreurs de management passées :", options: [
+      { id: "a", text: "J'ai rarement commis d'erreurs significatives dans ma carrière", score: 1 },
+      { id: "b", text: "J'en ai fait mais j'ai toujours su les transformer en opportunités", score: 2 },
+      { id: "c", text: "Certaines erreurs ont eu des conséquences que je n'ai pas pu rattraper", score: 4 },
+      { id: "d", text: "Je préfère ne pas m'attarder sur le passé et regarder vers l'avant", score: 3 },
+    ]},
+    { dim: "desirability", order: 3, text: "Votre rapport aux feedbacks négatifs de vos collaborateurs :", options: [
+      { id: "a", text: "Je les accueille toujours avec ouverture et gratitude", score: 1 },
+      { id: "b", text: "Je les sollicite activement mais certains sont difficiles à entendre", score: 4 },
+      { id: "c", text: "Je les écoute mais je ne suis pas toujours d'accord", score: 3 },
+      { id: "d", text: "Mon équipe sait qu'elle peut tout me dire sans filtre", score: 2 },
+    ]},
+    { dim: "desirability", order: 4, text: "Face à une décision importante avec des informations incomplètes :", options: [
+      { id: "a", text: "Je prends toujours la bonne décision grâce à mon intuition et mon expérience", score: 1 },
+      { id: "b", text: "Il m'arrive de douter et de remettre en question mes choix après coup", score: 4 },
+      { id: "c", text: "Je m'appuie sur mon réseau pour valider mes intuitions", score: 3 },
+      { id: "d", text: "Je décide vite et j'ajuste ensuite sans regret", score: 2 },
     ]},
   ],
 };

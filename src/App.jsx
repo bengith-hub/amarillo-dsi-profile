@@ -203,8 +203,29 @@ function getAnalysis(scores, assessment) {
   const bottom3 = sorted.slice(-3).map(([id]) => dimensions.find(d => d.id===id));
   const avg = Object.values(scores).reduce((a,b) => a+b, 0) / dimensions.length;
   const ps = pillars.map((_,pi) => { const ds=dimensions.filter(d=>d.pillar===pi); return ds.reduce((s,d)=>s+(scores[d.id]||0),0)/ds.length; });
-  const match = profiles.find(p => p.condition(ps, avg));
-  return { top3, bottom3, avg, pillarScores: ps, profile: match.name, description: match.description, strengths: match.strengths, development: match.development, context: match.context };
+
+  // Weighted profile matching: compute match score for each profile
+  const profileMatches = profiles.map(p => {
+    const w = p.weights || [0.33, 0.34, 0.33];
+    const weightedScore = ps.reduce((sum, s, i) => sum + s * w[i], 0);
+    const eligible = weightedScore >= (p.minScore || 0);
+    // Normalize to percentage (max possible = 4.0)
+    const pct = Math.min(Math.round((weightedScore / 4.0) * 100), 100);
+    return { ...p, weightedScore, eligible, pct };
+  });
+
+  // Primary profile: first eligible in priority order
+  const match = profileMatches.find(p => p.eligible) || profileMatches[profileMatches.length - 1];
+  // Top 3 profiles by weighted score (for display)
+  const topProfiles = [...profileMatches].sort((a, b) => b.weightedScore - a.weightedScore).slice(0, 3);
+
+  return {
+    top3, bottom3, avg, pillarScores: ps,
+    profile: match.name, description: match.description,
+    strengths: match.strengths, development: match.development, context: match.context,
+    matchPct: match.pct,
+    topProfiles,
+  };
 }
 
 // ============================================================
@@ -669,6 +690,19 @@ export default function App() {
               );
             })}
           </div>
+
+          {/* Methodology section */}
+          {adminAssessment.methodology && (
+            <div style={{ ...box, padding: 32, marginTop: 40 }}>
+              <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 24 }}>{adminAssessment.methodology.title}</h3>
+              {adminAssessment.methodology.sections.map((section, i) => (
+                <div key={i} style={{ marginBottom: i < adminAssessment.methodology.sections.length - 1 ? 24 : 0 }}>
+                  <h4 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 15, fontWeight: 700, color: "#d0d0d0", marginBottom: 8 }}>{section.heading}</h4>
+                  <p style={{ fontSize: 13, lineHeight: 1.8, color: "#888", margin: 0 }}>{section.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -731,10 +765,25 @@ export default function App() {
 
             <div data-section="profile" style={{ padding: "32px 36px", marginBottom: 40, background: "rgba(254,204,2,0.03)", border: "1px solid rgba(254,204,2,0.12)", borderLeft: "4px solid #FECC02", borderRadius: 2 }}>
               <h2 data-profile-title style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
-              <div data-score-badge style={{ display: "inline-block", marginBottom: 16, padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
-                Score global : {analysis.avg.toFixed(2)} / 4.00
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
+                  Score global : {analysis.avg.toFixed(2)} / 4.00
+                </div>
+                <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
+                  Correspondance : {analysis.matchPct}%
+                </div>
               </div>
               <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
+
+              {/* Top 3 profile matches */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                {analysis.topProfiles.map((tp, i) => (
+                  <div key={i} style={{ padding: "8px 14px", background: i === 0 ? "rgba(254,204,2,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${i === 0 ? "rgba(254,204,2,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 2, fontSize: 12, fontFamily: "'DM Mono', monospace" }}>
+                    <span style={{ color: i === 0 ? "#FECC02" : "#888" }}>{tp.name}</span>
+                    <span style={{ color: "#666", marginLeft: 8 }}>{tp.pct}%</span>
+                  </div>
+                ))}
+              </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
                 <div style={{ padding: "16px 20px", background: "rgba(82,183,136,0.05)", border: "1px solid rgba(82,183,136,0.15)", borderRadius: 2 }}>

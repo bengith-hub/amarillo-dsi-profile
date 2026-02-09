@@ -75,6 +75,7 @@ async function saveSession(session) {
       name: session.candidateName,
       role: session.candidateRole,
       format: session.format,
+      assessmentType: session.assessmentType || DEFAULT_ASSESSMENT,
       status: session.status,
       email: session.candidateEmail || "",
       createdAt: session.createdAt,
@@ -210,7 +211,8 @@ function getAnalysis(scores, assessment) {
 // MAIN APP
 // ============================================================
 export default function App() {
-  const [view, setView] = useState("home");
+  const [view, setView] = useState("landing");
+  const [adminAssessmentType, setAdminAssessmentType] = useState(DEFAULT_ASSESSMENT);
   const [adminPwd, setAdminPwd] = useState("");
   const [sessions, setSessions] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
@@ -234,6 +236,7 @@ export default function App() {
 
   // Get current assessment config (from session or default)
   const currentAssessment = getAssessment(currentSession?.assessmentType || DEFAULT_ASSESSMENT);
+  const adminAssessment = getAssessment(adminAssessmentType);
 
   useEffect(() => { if (view === "admin") loadSessions(); }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
@@ -244,9 +247,9 @@ export default function App() {
     const code = generateCode();
     const session = {
       code, candidateName: newName, candidateRole: newRole, format: newFormat,
-      assessmentType: DEFAULT_ASSESSMENT,
+      assessmentType: adminAssessmentType,
       status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
-      totalTimeMs: 0, questions: selectQuestions(newFormat, currentAssessment).map((q, i) => ({ ...q, idx: i })),
+      totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
     };
     await saveSession(session);
     setNewName(""); setNewRole("");
@@ -299,7 +302,7 @@ export default function App() {
     const updated = { ...currentSession, currentQ, totalTimeMs: elapsed, status: "in_progress" };
     await saveSession(updated);
     setSaving(false);
-    setView("home");
+    setView("landing");
   };
 
   const computeScores = () => {
@@ -500,19 +503,39 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "#0a0b0e", color: "#f0f0f0", fontFamily: "'DM Sans', sans-serif" }}>
 
-      {/* ===== HOME ===== */}
-      {view === "home" && (
-        <div style={{ maxWidth: 600, margin: "0 auto", padding: "60px 24px", textAlign: "center", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      {/* ===== LANDING ===== */}
+      {view === "landing" && (
+        <div style={{ maxWidth: 700, margin: "0 auto", padding: "60px 24px", textAlign: "center", minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ marginBottom: 32, alignSelf: "center" }}>
             <img src={amarilloLogoWhite} alt="Amarillo Search" style={{ width: "clamp(220px, 50vw, 340px)", objectFit: "contain", display: "block" }} />
           </div>
           <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 700, lineHeight: 1.1, marginBottom: 12, letterSpacing: "-0.02em", background: "linear-gradient(135deg, #FECC02, #FEE066, #FECC02)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            {defaultAssmt.label}
+            Amarillo Profiling
           </h1>
           <p style={{ color: "#888", fontSize: 15, marginBottom: 48, lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}>
-            {defaultAssmt.subtitle}
+            Plateforme d'évaluations comportementales
           </p>
 
+          {/* Assessment cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16, marginBottom: 40, textAlign: "left" }}>
+            {Object.values(ASSESSMENTS).map((assmt) => (
+              <div key={assmt.id}
+                style={{ ...box, padding: 28, cursor: "default", transition: "all 0.2s ease", borderLeft: "3px solid #FECC02" }}
+              >
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 20, fontWeight: 700, color: "#FECC02", marginBottom: 8 }}>
+                  {assmt.label}
+                </div>
+                <div style={{ fontSize: 13, color: "#888", lineHeight: 1.5, marginBottom: 12 }}>
+                  {assmt.subtitle}
+                </div>
+                <div style={{ fontSize: 11, color: "#666", fontFamily: "'DM Mono', monospace" }}>
+                  {assmt.dimensions.length} dimensions · {assmt.pillars.length} piliers · {Object.keys(assmt.formats).length} formats
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Resume code input */}
           <div style={{ ...box, padding: 32, marginBottom: 24, textAlign: "left" }}>
             <label style={{ display: "block", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>
               Reprendre une évaluation
@@ -561,7 +584,7 @@ export default function App() {
             </div>
             <button onClick={() => { if (adminPwd === ADMIN_PASSWORD) setView("admin"); }} style={btn(adminPwd.length > 0)}>Connexion</button>
           </div>
-          <button onClick={() => setView("home")} style={{ ...btnOutline, marginTop: 24 }}>← Retour</button>
+          <button onClick={() => setView("landing")} style={{ ...btnOutline, marginTop: 24 }}>← Retour</button>
         </div>
       )}
 
@@ -570,11 +593,32 @@ export default function App() {
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
             <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#FECC02", margin: 0 }}>Administration</h2>
-            <button onClick={() => { setView("home"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
+            <button onClick={() => { setView("landing"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
           </div>
 
           <div style={{ ...box, padding: 32, marginBottom: 40 }}>
             <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 24 }}>Créer une nouvelle évaluation</h3>
+
+            {/* Assessment type selector — visible only when multiple assessments exist */}
+            {Object.keys(ASSESSMENTS).length > 1 && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>Type d'évaluation</label>
+                <div style={{ display: "flex", gap: 12 }}>
+                  {Object.values(ASSESSMENTS).map((assmt) => (
+                    <button key={assmt.id} onClick={() => setAdminAssessmentType(assmt.id)}
+                      style={{
+                        flex: 1, padding: "14px 12px", textAlign: "center", borderRadius: 2, cursor: "pointer",
+                        background: adminAssessmentType === assmt.id ? "rgba(232,168,56,0.12)" : "rgba(255,255,255,0.03)",
+                        border: `1px solid ${adminAssessmentType === assmt.id ? "#FECC02" : "rgba(255,255,255,0.08)"}`,
+                        color: adminAssessmentType === assmt.id ? "#FECC02" : "#888",
+                      }}>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700 }}>{assmt.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Candidat</label>
@@ -582,13 +626,13 @@ export default function App() {
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Poste visé</label>
-                <input type="text" value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder={currentAssessment.rolePlaceholder} style={input} />
+                <input type="text" value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder={adminAssessment.rolePlaceholder} style={input} />
               </div>
             </div>
 
             <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>Format</label>
             <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
-              {Object.entries(currentAssessment.formats).map(([key, fmt]) => (
+              {Object.entries(adminAssessment.formats).map(([key, fmt]) => (
                 <button key={key} onClick={() => setNewFormat(key)}
                   style={{
                     flex: 1, padding: "16px 12px", textAlign: "center", borderRadius: 2, cursor: "pointer",
@@ -623,7 +667,7 @@ export default function App() {
                 <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {currentAssessment.formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
+                    <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#FECC02", fontWeight: 700 }}>{s.code}</span>
@@ -792,7 +836,7 @@ export default function App() {
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
                   📄 Télécharger PDF
                 </button>
-                <button onClick={() => { setCurrentSession(null); setView("home"); }} style={btnOutline}>← Retour à l'accueil</button>
+                <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
               </div>
             </div>
           </div>

@@ -138,7 +138,32 @@ async function loadAllSessions() {
 }
 
 // --- COMPONENTS ---
-const RANK_WEIGHTS = [1.0, 0.66, 0.33, 0.0];
+const RANK_WEIGHTS = [1.0, 0.50, 0.15, 0.0];
+
+// Scoring normalization constants (based on RANK_WEIGHTS with scores [1,2,3,4])
+const WEIGHT_SUM = RANK_WEIGHTS.reduce((a, b) => a + b, 0);
+const SCORE_THEORETICAL_MIN = (1 * RANK_WEIGHTS[0] + 2 * RANK_WEIGHTS[1] + 3 * RANK_WEIGHTS[2] + 4 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
+const SCORE_THEORETICAL_MAX = (4 * RANK_WEIGHTS[0] + 3 * RANK_WEIGHTS[1] + 2 * RANK_WEIGHTS[2] + 1 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
+const SCORE_RANDOM_EXPECTED = 2.5;
+
+function normalizeScore(raw) {
+  return Math.round(Math.max(0, Math.min(100, ((raw - SCORE_THEORETICAL_MIN) / (SCORE_THEORETICAL_MAX - SCORE_THEORETICAL_MIN)) * 100)));
+}
+
+// Significance vs random: compute z-score using permutation variance
+// Var[single_question] = (1/(n-1)) * Σ(w_i - w̄)² * Σ(s_j - s̄)² / (Σw)²
+// where n=4, s=[1,2,3,4], w=RANK_WEIGHTS
+function computeSignificance(globalScore, questionsPerDim) {
+  const n = 4;
+  const wMean = WEIGHT_SUM / n;
+  const wVar = RANK_WEIGHTS.reduce((s, w) => s + (w - wMean) ** 2, 0);
+  const sVar = [1,2,3,4].reduce((s, v) => s + (v - 2.5) ** 2, 0); // = 5.0
+  const varSingle = (1 / (n - 1)) * wVar * sVar / (WEIGHT_SUM ** 2);
+  const varGlobal = varSingle / (questionsPerDim * 12);
+  const sigma = Math.sqrt(varGlobal);
+  const zScore = sigma > 0 ? (globalScore - SCORE_RANDOM_EXPECTED) / sigma : 0;
+  return { zScore, sigma };
+}
 
 function RankingCard({ question, dimColor, onComplete }) {
   const [ranked, setRanked] = useState([]);
@@ -247,12 +272,19 @@ function getAnalysis(scores, assessment) {
   // Top 3 profiles by weighted score (for display)
   const topProfiles = [...profileMatches].sort((a, b) => b.weightedScore - a.weightedScore).slice(0, 3);
 
+  // Normalized scores (0-100 scale)
+  const avgNorm = normalizeScore(avg);
+  const pillarScoresNorm = ps.map(s => normalizeScore(s));
+  const scoresNorm = {};
+  Object.entries(scores).forEach(([id, s]) => { scoresNorm[id] = normalizeScore(s); });
+
   return {
     top3, bottom3, avg, pillarScores: ps,
     profile: match.name, description: match.description,
     strengths: match.strengths, development: match.development, context: match.context,
     matchPct: match.pct,
     topProfiles,
+    avgNorm, pillarScoresNorm, scoresNorm,
   };
 }
 
@@ -415,9 +447,18 @@ export default function App() {
   const computeScores = () => {
     if (!currentSession) return {};
     const scores = {};
+    const DEVIATION_ALPHA = 1.0;
     currentAssessment.dimensions.forEach((dim) => {
       const arr = currentSession.answers[dim.id] || [];
-      scores[dim.id] = arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      if (arr.length === 0) { scores[dim.id] = 0; return; }
+      // Non-linear deviation weighting: answers far from random (2.5) count more
+      let wSum = 0, wsSum = 0;
+      arr.forEach(s => {
+        const w = 1 + DEVIATION_ALPHA * Math.abs(s - SCORE_RANDOM_EXPECTED);
+        wsSum += s * w;
+        wSum += w;
+      });
+      scores[dim.id] = wsSum / wSum;
     });
     return scores;
   };
@@ -562,6 +603,165 @@ export default function App() {
     hideEls.forEach(e => e.style.display = "");
     if (footer) footer.style.borderTop = "";
     logos.forEach((img, idx) => { img.src = originalSrcs[idx]; });
+  };
+
+  const handleDownloadExecutivePDF = async () => {
+    if (!currentSession || !currentAssessment) return;
+    const scores = computeScores();
+    const analysis = getAnalysis(scores, currentAssessment);
+    const reliability = computeReliability(currentSession, currentAssessment);
+    const fmt = currentAssessment.formats[currentSession.format] || currentAssessment.formats.standard;
+    const sig = computeSignificance(analysis.avg, fmt.questionsPerDim);
+    const absZ = Math.abs(sig.zScore);
+    const sigLabel = absZ >= 3 ? "Hautement significatif" : absZ >= 2 ? "Significatif" : absZ >= 1 ? "Faiblement significatif" : "Non significatif";
+
+    // Build radar SVG (light theme, compact)
+    const dims = currentAssessment.dimensions;
+    const n = dims.length, sz = 200, pad = 60, vw = sz + pad * 2, cx = vw / 2, r = sz * 0.38;
+    const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: cx + (v / 4) * r * Math.cos(a), y: cx + (v / 4) * r * Math.sin(a) }; };
+    const gridPolys = [1,2,3,4].map(l => `<polygon points="${dims.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")}" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>`).join("");
+    const radials = dims.map((d,i) => { const p=pt(i,4); return `<line x1="${cx}" y1="${cx}" x2="${p.x}" y2="${p.y}" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>`; }).join("");
+    const area = `<polygon points="${dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")}" fill="rgba(254,204,2,0.15)" stroke="#C9A200" stroke-width="2"/>`;
+    const dots = dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${d.color}" stroke="#fff" stroke-width="1"/>`; }).join("");
+    const labels = dims.map((d,i) => { const p=pt(i,5.2); const a=(360*i)/n-90; const anch = Math.abs(a+90)<15||Math.abs(a-90)<15 ? "middle" : (a>-90&&a<90) ? "start" : "end"; const bl = (a>0&&a<180) ? "hanging" : "auto"; return `<text x="${p.x}" y="${p.y}" text-anchor="${anch}" dominant-baseline="${bl}" fill="#555" font-size="8" font-family="sans-serif">${d.icon} ${d.name}</text>`; }).join("");
+    const radarSVG = `<svg viewBox="0 0 ${vw} ${vw}" width="280" height="280" xmlns="http://www.w3.org/2000/svg">${gridPolys}${radials}${area}${dots}${labels}</svg>`;
+
+    const pillarsHTML = currentAssessment.pillars.map((p, i) =>
+      `<div style="flex:1;text-align:center;padding:8px 12px;background:${p.color}0a;border:1px solid ${p.color}33;border-radius:2px">
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:${p.color};margin-bottom:4px;font-weight:600">${p.name}</div>
+        <div style="font-size:28px;font-weight:700;color:#1a1a1a">${analysis.pillarScoresNorm[i]}</div>
+        <div style="font-size:10px;color:#888">/100</div>
+      </div>`
+    ).join("");
+
+    const top3HTML = analysis.top3.map(d =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+        <span style="color:#333">${d.icon} ${d.name}</span>
+        <span style="color:#2D6A4F;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+      </div>`
+    ).join("");
+
+    const bottom3HTML = analysis.bottom3.map(d =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+        <span style="color:#333">${d.icon} ${d.name}</span>
+        <span style="color:#8B7000;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+      </div>`
+    ).join("");
+
+    const topProfilesHTML = analysis.topProfiles.map((tp, i) =>
+      `<span style="display:inline-block;padding:3px 8px;margin-right:6px;background:${i===0?'#FECC0215':'#f5f5f5'};border:1px solid ${i===0?'#FECC0244':'#e0e0e0'};border-radius:2px;font-size:10px;font-family:monospace">
+        ${tp.name} ${tp.pct}%
+      </span>`
+    ).join("");
+
+    // Reliability badges
+    let reliabilityHTML = "";
+    if (reliability) {
+      const cohColor = reliability.coherenceLevel.color;
+      const desColor = reliability.desirabilityLevel.color;
+      const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
+      reliabilityHTML = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
+            Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
+          </span>
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
+            Desirabilite ${reliability.desirabilityScore}% — ${reliability.desirabilityLevel.label}
+          </span>
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
+            Significativite z=${sig.zScore.toFixed(1)} — ${sigLabel}
+          </span>
+        </div>`;
+    }
+
+    const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
+
+    const html = `
+      <div id="exec-pdf" style="width:780px;padding:28px 32px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #FECC02;padding-bottom:12px;margin-bottom:16px">
+          <div>
+            <img src="${amarilloLogoDark}" style="height:28px;margin-bottom:4px" />
+            <div style="font-size:16px;font-weight:700;color:#1a1a1a">Synthese Candidat(e)</div>
+          </div>
+          <div style="text-align:right;font-size:10px;color:#888;font-family:monospace">
+            <div>${currentSession.code}</div>
+            <div>${dateStr} · ${fmt.label}</div>
+            <div>Poste : ${currentSession.candidateRole || currentAssessment.defaultRole}</div>
+          </div>
+        </div>
+
+        <!-- Profile + Score -->
+        <div style="display:flex;gap:16px;margin-bottom:14px;align-items:center">
+          <div style="flex:1">
+            <div style="display:inline-block;background:#FECC02;color:#1a1a1a;padding:4px 12px;border-radius:2px;font-size:14px;font-weight:700;margin-bottom:8px">${analysis.profile}</div>
+            <div style="display:flex;gap:10px;margin-bottom:8px">
+              <span style="padding:4px 10px;background:#1a1a1a;color:#FECC02;border-radius:2px;font-size:12px;font-family:monospace;font-weight:700">Indice global : ${analysis.avgNorm}/100</span>
+              <span style="padding:4px 10px;background:#f5f5f5;border-radius:2px;font-size:12px;font-family:monospace">Correspondance : ${analysis.matchPct}%</span>
+            </div>
+            <div style="font-size:10px;color:#888;margin-bottom:6px">${topProfilesHTML}</div>
+          </div>
+        </div>
+
+        <!-- Pillars -->
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          ${pillarsHTML}
+        </div>
+
+        <!-- Radar + Synthesis side by side -->
+        <div style="display:flex;gap:14px;margin-bottom:14px">
+          <div style="flex:0 0 280px;text-align:center">
+            ${radarSVG}
+          </div>
+          <div style="flex:1;display:flex;gap:10px">
+            <div style="flex:1;padding:10px 12px;background:#f8fdf8;border:1px solid #d4edda;border-radius:2px">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#2D6A4F;font-weight:700;margin-bottom:8px">Points forts</div>
+              ${top3HTML}
+            </div>
+            <div style="flex:1;padding:10px 12px;background:#fffdf5;border:1px solid #ffeeba;border-radius:2px">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#8B7000;font-weight:700;margin-bottom:8px">Axes de developpement</div>
+              ${bottom3HTML}
+            </div>
+          </div>
+        </div>
+
+        <!-- Reliability -->
+        <div style="padding:8px 12px;background:#fafafa;border:1px solid #eee;border-radius:2px;margin-bottom:12px">
+          <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px">Indicateurs de fiabilite</div>
+          ${reliabilityHTML}
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align:center;padding-top:8px;border-top:1px solid #eee;font-size:9px;color:#aaa">
+          ${currentAssessment.label} · Rapport confidentiel · ${currentSession.code}
+        </div>
+      </div>
+    `;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.top = "-9999px";
+    container.style.left = "-9999px";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const el = container.querySelector("#exec-pdf");
+
+    try {
+      await new Promise(r => setTimeout(r, 150));
+      const html2pdf = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: `${currentAssessment.pdfPrefix}_SYNTHESE_${currentSession.code}.pdf`,
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 850 },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+      await html2pdf().set(opt).from(el).save();
+    } catch (err) {
+      console.error("Executive PDF generation error:", err);
+    }
+    document.body.removeChild(container);
   };
 
   const handleSendEmail = async () => {
@@ -859,10 +1059,13 @@ export default function App() {
               <h2 data-profile-title style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
                 <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
-                  Score global : {analysis.avg.toFixed(2)} / 4.00
+                  Indice global : {analysis.avgNorm}/100
                 </div>
                 <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                   Correspondance : {analysis.matchPct}%
+                </div>
+                <div data-score-badge style={{ padding: "6px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#666" }}>
+                  Score brut : {analysis.avg.toFixed(2)} / 4.00
                 </div>
               </div>
               <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
@@ -902,8 +1105,9 @@ export default function App() {
               {currentAssessment.pillars.map((p, i) => (
                 <div key={i} style={{ flex: "1 1 250px", padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
-                  <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
-                  <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/4.00</div>
+                  <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScoresNorm[i]}</div>
+                  <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/100</div>
+                  <div style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>({analysis.pillarScores[i].toFixed(2)} / 4.00)</div>
                 </div>
               ))}
             </div>
@@ -921,7 +1125,7 @@ export default function App() {
                 {analysis.top3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <span data-dim-label>{dim.icon} {dim.name}</span>
-                    <span data-synth-score="green" style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-synth-score="green" style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{analysis.scoresNorm[dim.id]}/100</span>
                   </div>
                 ))}
               </div>
@@ -930,7 +1134,7 @@ export default function App() {
                 {analysis.bottom3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <span data-dim-label>{dim.icon} {dim.name}</span>
-                    <span data-synth-score="yellow" style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-synth-score="yellow" style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{analysis.scoresNorm[dim.id]}/100</span>
                   </div>
                 ))}
               </div>
@@ -981,6 +1185,37 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Significance vs random */}
+                {(() => {
+                  const fmt = currentAssessment.formats[currentSession.format] || currentAssessment.formats.standard;
+                  const sig = computeSignificance(analysis.avg, fmt.questionsPerDim);
+                  const absZ = Math.abs(sig.zScore);
+                  const sigLabel = absZ >= 3 ? "Hautement significatif" : absZ >= 2 ? "Significatif" : absZ >= 1 ? "Faiblement significatif" : "Non significatif";
+                  const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
+                  const sigIcon = absZ >= 2 ? "✓" : absZ >= 1 ? "⚠" : "🚨";
+                  return (
+                    <div style={{ flex: "1 1 280px", marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, color: "#ccc" }}>Significativité vs. hasard</span>
+                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, color: sigColor }}>
+                          z = {sig.zScore.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                        <div style={{ height: "100%", borderRadius: 4, width: `${Math.min(100, absZ / 4 * 100)}%`, background: sigColor, transition: "width 1s ease" }} />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${sigColor}22`, color: sigColor, fontFamily: "'DM Mono', monospace" }}>
+                          {sigIcon} {sigLabel}
+                        </span>
+                        <span style={{ fontSize: 11, color: "#555" }}>
+                          {absZ >= 2 ? "Résultat fiable, nettement au-dessus du hasard" : absZ >= 1 ? "Résultat à interpréter avec prudence" : "Score proche d'une réponse aléatoire"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Detail: coherence pairs */}
                 <details style={{ marginTop: 8 }}>
                   <summary style={{ fontSize: 12, color: "#666", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>Détail des paires miroir</summary>
@@ -1025,8 +1260,13 @@ export default function App() {
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
               <div data-pdf-hide-btns="true" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
-                  📄 Télécharger PDF
+                  📄 Telecharger PDF
                 </button>
+                {isAdminView && (
+                  <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
+                    📋 PDF Dirigeant (anonyme)
+                  </button>
+                )}
                 <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
               </div>
             </div>

@@ -100,7 +100,12 @@ async function updateBin(record) {
 async function saveSession(session) {
   try {
     const record = await readBin();
-    record.sessions[session.code] = session;
+    // Strip full question texts from completed sessions to save JSONBin space
+    const toStore = { ...session };
+    if (toStore.status === "completed" && toStore.questions) {
+      toStore.questions = toStore.questions.map(q => ({ dim: q.dim, order: q.order, idx: q.idx, ...(q.mirrorOf ? { mirrorOf: q.mirrorOf } : {}) }));
+    }
+    record.sessions[toStore.code] = toStore;
     const idx = record.index.findIndex(s => s.code === session.code);
     const summary = {
       code: session.code,
@@ -138,6 +143,19 @@ async function loadAllSessions() {
     return record.index || [];
   } catch (e) {
     return [];
+  }
+}
+
+async function deleteSession(code) {
+  try {
+    const record = await readBin();
+    delete record.sessions[code];
+    record.index = (record.index || []).filter(s => s.code !== code);
+    await updateBin(record);
+    return true;
+  } catch (e) {
+    console.error("Delete error:", e);
+    return false;
   }
 }
 
@@ -376,6 +394,8 @@ export default function App() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [adminError, setAdminError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
@@ -407,22 +427,43 @@ export default function App() {
     setNotifications(prev => prev.filter(n => n.code !== code));
   };
 
+  const handleDeleteSession = async (code) => {
+    setDeleting(true);
+    const ok = await deleteSession(code);
+    setDeleting(false);
+    setDeleteConfirm(null);
+    if (ok) {
+      await loadSessions();
+    } else {
+      setAdminError("Erreur lors de la suppression. Réessayez.");
+    }
+  };
+
   const createSession = async () => {
     setAdminError("");
-    const code = generateCode();
-    const session = {
-      code, candidateName: newName, candidateRole: newRole, format: newFormat,
-      assessmentType: adminAssessmentType,
-      status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
-      totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
-    };
-    const ok = await saveSession(session);
-    if (!ok) {
-      setAdminError("Erreur lors de la sauvegarde (403). Verifiez la cle API JSONBin ou le quota du compte.");
-      return;
+    setLoading(true);
+    try {
+      const code = generateCode();
+      const session = {
+        code, candidateName: newName, candidateRole: newRole, format: newFormat,
+        assessmentType: adminAssessmentType,
+        status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
+        totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
+      };
+      const ok = await saveSession(session);
+      if (!ok) {
+        setAdminError("Erreur lors de la sauvegarde. Vérifiez la clé API JSONBin ou le quota du compte.");
+        setLoading(false);
+        return;
+      }
+      setNewName(""); setNewRole("");
+      await loadSessions();
+    } catch (e) {
+      console.error("Create session error:", e);
+      setAdminError(`Erreur lors de la création : ${e.message || "erreur inconnue"}`);
+    } finally {
+      setLoading(false);
     }
-    setNewName(""); setNewRole("");
-    await loadSessions();
   };
 
   const startQuiz = (session) => {
@@ -1030,8 +1071,8 @@ export default function App() {
               ))}
             </div>
 
-            <button onClick={createSession} disabled={!newName.trim()} style={{ ...btn(!!newName.trim()), width: "100%" }}>
-              Générer le code d'accès
+            <button onClick={createSession} disabled={!newName.trim() || loading} style={{ ...btn(!!newName.trim() && !loading), width: "100%" }}>
+              {loading ? "Création en cours..." : "Générer le code d'accès"}
             </button>
             {adminError && (
               <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 12, padding: "10px 14px", background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.2)", borderRadius: 2 }}>
@@ -1068,11 +1109,42 @@ export default function App() {
                         Voir résultats
                       </button>
                     )}
+                    <button onClick={() => setDeleteConfirm(s.code)}
+                      style={{ ...btnOutline, padding: "6px 10px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}
+                      title="Supprimer cette session">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Delete confirmation modal */}
+          {deleteConfirm && (
+            <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+              onClick={() => !deleting && setDeleteConfirm(null)}>
+              <div style={{ background: "#1a1b1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: 32, maxWidth: 420, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+                onClick={e => e.stopPropagation()}>
+                <h3 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: "#f0f0f0", marginBottom: 12 }}>Supprimer cette session ?</h3>
+                <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6, marginBottom: 8 }}>
+                  Session <span style={{ fontFamily: "'DM Mono', monospace", color: "#FECC02", fontWeight: 700 }}>{deleteConfirm}</span>
+                </p>
+                <p style={{ fontSize: 13, color: "#e74c3c", lineHeight: 1.6, marginBottom: 24 }}>
+                  Cette action est irréversible. Toutes les données de cette session seront définitivement supprimées.
+                </p>
+                <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                  <button onClick={() => setDeleteConfirm(null)} disabled={deleting} style={btnOutline}>Annuler</button>
+                  <button onClick={() => handleDeleteSession(deleteConfirm)} disabled={deleting}
+                    style={{ padding: "12px 24px", fontSize: 13, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: deleting ? "rgba(231,76,60,0.3)" : "#e74c3c", color: "#fff", border: "none", borderRadius: 2, cursor: deleting ? "default" : "pointer" }}>
+                    {deleting ? "Suppression..." : "Supprimer"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Methodology section */}
           {adminAssessment.methodology && (

@@ -743,6 +743,19 @@ export default function App() {
 
     const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
 
+    // Build narrative synthesis paragraph for directors
+    const topDimNames = analysis.top3.map(d => d.name).join(", ");
+    const bottomDimNames = analysis.bottom3.map(d => d.name).join(", ");
+    const pillarNames = currentAssessment.pillars.map(p => p.name);
+    const strongestPillarIdx = analysis.pillarScoresNorm.indexOf(Math.max(...analysis.pillarScoresNorm));
+    const weakestPillarIdx = analysis.pillarScoresNorm.indexOf(Math.min(...analysis.pillarScoresNorm));
+    const synthesisParagraph = `Ce(tte) candidat(e), évalué(e) sur ${currentAssessment.dimensions.length} dimensions comportementales, présente un profil de type <b>${analysis.profile}</b> avec un indice global de <b>${analysis.avgNorm}/100</b>. `
+      + `Son pilier le plus marqué est <b>${pillarNames[strongestPillarIdx]}</b> (${analysis.pillarScoresNorm[strongestPillarIdx]}/100), `
+      + `tandis que <b>${pillarNames[weakestPillarIdx]}</b> (${analysis.pillarScoresNorm[weakestPillarIdx]}/100) constitue le principal axe de progression. `
+      + `Les dimensions dominantes sont ${topDimNames}. `
+      + `Les axes de développement prioritaires portent sur ${bottomDimNames}. `
+      + `${analysis.description}`;
+
     const html = `
       <div id="exec-pdf" style="width:700px;padding:24px 28px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff;box-sizing:border-box">
         <!-- Header -->
@@ -766,6 +779,12 @@ export default function App() {
             <span style="padding:3px 8px;background:#f5f5f5;border-radius:2px;font-size:11px;font-family:monospace">Correspondance : ${analysis.matchPct}%</span>
           </div>
           <div style="font-size:9px;color:#888">${topProfilesHTML}</div>
+        </div>
+
+        <!-- Synthesis paragraph -->
+        <div style="padding:10px 14px;background:#f9f9f9;border-left:3px solid #FECC02;border-radius:2px;margin-bottom:12px">
+          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px">Synthese</div>
+          <p style="font-size:9.5px;line-height:1.6;color:#444;margin:0">${synthesisParagraph}</p>
         </div>
 
         <!-- Pillars -->

@@ -679,41 +679,44 @@ export default function App() {
     const absZ = Math.abs(sig.zScore);
     const sigLabel = absZ >= 3 ? "Hautement significatif" : absZ >= 2 ? "Significatif" : absZ >= 1 ? "Faiblement significatif" : "Non significatif";
 
+    // Generate anonymous reference (hash of code, not reversible)
+    const anonRef = "REF-" + Array.from(currentSession.code).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0).toString(36).toUpperCase().replace("-", "").slice(0, 5);
+
     // Build radar SVG (light theme, compact)
     const dims = currentAssessment.dimensions;
-    const n = dims.length, sz = 200, pad = 60, vw = sz + pad * 2, cx = vw / 2, r = sz * 0.38;
+    const n = dims.length, sz = 180, pad = 70, vw = sz + pad * 2, cx = vw / 2, r = sz * 0.38;
     const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: cx + (v / 4) * r * Math.cos(a), y: cx + (v / 4) * r * Math.sin(a) }; };
     const gridPolys = [1,2,3,4].map(l => `<polygon points="${dims.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")}" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>`).join("");
     const radials = dims.map((d,i) => { const p=pt(i,4); return `<line x1="${cx}" y1="${cx}" x2="${p.x}" y2="${p.y}" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>`; }).join("");
     const area = `<polygon points="${dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")}" fill="rgba(254,204,2,0.15)" stroke="#C9A200" stroke-width="2"/>`;
-    const dots = dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${d.color}" stroke="#fff" stroke-width="1"/>`; }).join("");
-    const labels = dims.map((d,i) => { const p=pt(i,5.2); const a=(360*i)/n-90; const anch = Math.abs(a+90)<15||Math.abs(a-90)<15 ? "middle" : (a>-90&&a<90) ? "start" : "end"; const bl = (a>0&&a<180) ? "hanging" : "auto"; return `<text x="${p.x}" y="${p.y}" text-anchor="${anch}" dominant-baseline="${bl}" fill="#555" font-size="8" font-family="sans-serif">${d.icon} ${d.name}</text>`; }).join("");
-    const radarSVG = `<svg viewBox="0 0 ${vw} ${vw}" width="280" height="280" xmlns="http://www.w3.org/2000/svg">${gridPolys}${radials}${area}${dots}${labels}</svg>`;
+    const dots = dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${d.color}" stroke="#fff" stroke-width="1"/>`; }).join("");
+    const labels = dims.map((d,i) => { const p=pt(i,4.8); const a=(360*i)/n-90; const anch = Math.abs(a+90)<15||Math.abs(a-90)<15 ? "middle" : (a>-90&&a<90) ? "start" : "end"; const bl = (a>0&&a<180) ? "hanging" : "auto"; return `<text x="${p.x}" y="${p.y}" text-anchor="${anch}" dominant-baseline="${bl}" fill="#555" font-size="7.5" font-family="Helvetica,Arial,sans-serif">${d.name}</text>`; }).join("");
+    const radarSVG = `<svg viewBox="0 0 ${vw} ${vw}" width="240" height="240" xmlns="http://www.w3.org/2000/svg">${gridPolys}${radials}${area}${dots}${labels}</svg>`;
 
     const pillarsHTML = currentAssessment.pillars.map((p, i) =>
-      `<div style="flex:1;text-align:center;padding:8px 12px;background:${p.color}0a;border:1px solid ${p.color}33;border-radius:2px">
-        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:${p.color};margin-bottom:4px;font-weight:600">${p.name}</div>
-        <div style="font-size:28px;font-weight:700;color:#1a1a1a">${analysis.pillarScoresNorm[i]}</div>
-        <div style="font-size:10px;color:#888">/100</div>
+      `<div style="flex:1;text-align:center;padding:8px 10px;background:${p.color}0a;border:1px solid ${p.color}33;border-radius:2px">
+        <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:${p.color};margin-bottom:2px;font-weight:600">${p.name}</div>
+        <div style="font-size:26px;font-weight:700;color:#1a1a1a">${analysis.pillarScoresNorm[i]}</div>
+        <div style="font-size:9px;color:#888">/100</div>
       </div>`
     ).join("");
 
     const top3HTML = analysis.top3.map(d =>
-      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee;font-size:10px">
         <span style="color:#333">${d.icon} ${d.name}</span>
-        <span style="color:#2D6A4F;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+        <span style="color:#2D6A4F;font-weight:700;font-family:monospace;white-space:nowrap;margin-left:8px">${analysis.scoresNorm[d.id]}/100</span>
       </div>`
     ).join("");
 
     const bottom3HTML = analysis.bottom3.map(d =>
-      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #eee;font-size:10px">
         <span style="color:#333">${d.icon} ${d.name}</span>
-        <span style="color:#8B7000;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+        <span style="color:#8B7000;font-weight:700;font-family:monospace;white-space:nowrap;margin-left:8px">${analysis.scoresNorm[d.id]}/100</span>
       </div>`
     ).join("");
 
     const topProfilesHTML = analysis.topProfiles.map((tp, i) =>
-      `<span style="display:inline-block;padding:3px 8px;margin-right:6px;background:${i===0?'#FECC0215':'#f5f5f5'};border:1px solid ${i===0?'#FECC0244':'#e0e0e0'};border-radius:2px;font-size:10px;font-family:monospace">
+      `<span style="display:inline-block;padding:2px 6px;margin-right:4px;background:${i===0?'#FECC0215':'#f5f5f5'};border:1px solid ${i===0?'#FECC0244':'#e0e0e0'};border-radius:2px;font-size:9px;font-family:monospace">
         ${tp.name} ${tp.pct}%
       </span>`
     ).join("");
@@ -725,14 +728,14 @@ export default function App() {
       const desColor = reliability.desirabilityLevel.color;
       const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
       reliabilityHTML = `
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
             Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
           </span>
-          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
+          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
             Desirabilite ${reliability.desirabilityScore}% — ${reliability.desirabilityLevel.label}
           </span>
-          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
+          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
             Significativite z=${sig.zScore.toFixed(1)} — ${sigLabel}
           </span>
         </div>`;
@@ -741,63 +744,61 @@ export default function App() {
     const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
 
     const html = `
-      <div id="exec-pdf" style="width:780px;padding:28px 32px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff">
+      <div id="exec-pdf" style="width:700px;padding:24px 28px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff;box-sizing:border-box">
         <!-- Header -->
-        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #FECC02;padding-bottom:12px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #FECC02;padding-bottom:10px;margin-bottom:14px">
           <div>
-            <img src="${amarilloLogoDark}" style="height:28px;margin-bottom:4px" />
-            <div style="font-size:16px;font-weight:700;color:#1a1a1a">Synthese Candidat(e)</div>
+            <img src="${amarilloLogoDark}" style="height:24px;margin-bottom:4px" />
+            <div style="font-size:14px;font-weight:700;color:#1a1a1a">Synthese Candidat(e)</div>
           </div>
-          <div style="text-align:right;font-size:10px;color:#888;font-family:monospace">
-            <div>${currentSession.code}</div>
+          <div style="text-align:right;font-size:9px;color:#888;font-family:monospace">
+            <div>${anonRef}</div>
             <div>${dateStr} · ${fmt.label}</div>
             <div>Poste : ${currentSession.candidateRole || currentAssessment.defaultRole}</div>
           </div>
         </div>
 
         <!-- Profile + Score -->
-        <div style="display:flex;gap:16px;margin-bottom:14px;align-items:center">
-          <div style="flex:1">
-            <div style="display:inline-block;background:#FECC02;color:#1a1a1a;padding:4px 12px;border-radius:2px;font-size:14px;font-weight:700;margin-bottom:8px">${analysis.profile}</div>
-            <div style="display:flex;gap:10px;margin-bottom:8px">
-              <span style="padding:4px 10px;background:#1a1a1a;color:#FECC02;border-radius:2px;font-size:12px;font-family:monospace;font-weight:700">Indice global : ${analysis.avgNorm}/100</span>
-              <span style="padding:4px 10px;background:#f5f5f5;border-radius:2px;font-size:12px;font-family:monospace">Correspondance : ${analysis.matchPct}%</span>
-            </div>
-            <div style="font-size:10px;color:#888;margin-bottom:6px">${topProfilesHTML}</div>
+        <div style="margin-bottom:12px">
+          <div style="display:inline-block;background:#FECC02;color:#1a1a1a;padding:3px 10px;border-radius:2px;font-size:13px;font-weight:700;margin-bottom:6px">${analysis.profile}</div>
+          <div style="display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+            <span style="padding:3px 8px;background:#1a1a1a;color:#FECC02;border-radius:2px;font-size:11px;font-family:monospace;font-weight:700">Indice global : ${analysis.avgNorm}/100</span>
+            <span style="padding:3px 8px;background:#f5f5f5;border-radius:2px;font-size:11px;font-family:monospace">Correspondance : ${analysis.matchPct}%</span>
           </div>
+          <div style="font-size:9px;color:#888">${topProfilesHTML}</div>
         </div>
 
         <!-- Pillars -->
-        <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
           ${pillarsHTML}
         </div>
 
         <!-- Radar + Synthesis side by side -->
-        <div style="display:flex;gap:14px;margin-bottom:14px">
-          <div style="flex:0 0 280px;text-align:center">
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <div style="flex:0 0 240px;text-align:center">
             ${radarSVG}
           </div>
-          <div style="flex:1;display:flex;gap:10px">
-            <div style="flex:1;padding:10px 12px;background:#f8fdf8;border:1px solid #d4edda;border-radius:2px">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#2D6A4F;font-weight:700;margin-bottom:8px">Points forts</div>
+          <div style="flex:1;display:flex;gap:8px">
+            <div style="flex:1;padding:8px 10px;background:#f8fdf8;border:1px solid #d4edda;border-radius:2px">
+              <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#2D6A4F;font-weight:700;margin-bottom:6px">Points forts</div>
               ${top3HTML}
             </div>
-            <div style="flex:1;padding:10px 12px;background:#fffdf5;border:1px solid #ffeeba;border-radius:2px">
-              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#8B7000;font-weight:700;margin-bottom:8px">Axes de developpement</div>
+            <div style="flex:1;padding:8px 10px;background:#fffdf5;border:1px solid #ffeeba;border-radius:2px">
+              <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#8B7000;font-weight:700;margin-bottom:6px">Axes de developpement</div>
               ${bottom3HTML}
             </div>
           </div>
         </div>
 
         <!-- Reliability -->
-        <div style="padding:8px 12px;background:#fafafa;border:1px solid #eee;border-radius:2px;margin-bottom:12px">
-          <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px">Indicateurs de fiabilite</div>
+        <div style="padding:6px 10px;background:#fafafa;border:1px solid #eee;border-radius:2px;margin-bottom:10px">
+          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px">Indicateurs de fiabilite</div>
           ${reliabilityHTML}
         </div>
 
         <!-- Footer -->
-        <div style="text-align:center;padding-top:8px;border-top:1px solid #eee;font-size:9px;color:#aaa">
-          ${currentAssessment.label} · Rapport confidentiel · ${currentSession.code}
+        <div style="text-align:center;padding-top:6px;border-top:1px solid #eee;font-size:8px;color:#aaa">
+          ${currentAssessment.label} · Rapport confidentiel · ${anonRef}
         </div>
       </div>
     `;
@@ -815,9 +816,9 @@ export default function App() {
       const html2pdf = (await import("html2pdf.js")).default;
       const opt = {
         margin: [8, 8, 8, 8],
-        filename: `${currentAssessment.pdfPrefix}_SYNTHESE_${currentSession.code}.pdf`,
+        filename: `${currentAssessment.pdfPrefix}_SYNTHESE_${anonRef}.pdf`,
         image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 850 },
+        html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 760 },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         pagebreak: { mode: ["avoid-all", "css", "legacy"] },
       };

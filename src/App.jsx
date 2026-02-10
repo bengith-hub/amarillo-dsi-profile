@@ -83,7 +83,7 @@ async function readBin() {
 }
 
 async function updateBin(record) {
-  await fetch(`${JSONBIN_BASE}/b/${JSONBIN_BIN_ID}`, {
+  const res = await fetch(`${JSONBIN_BASE}/b/${JSONBIN_BIN_ID}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -91,6 +91,10 @@ async function updateBin(record) {
     },
     body: JSON.stringify(record)
   });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(`JSONBin ${res.status}: ${msg || res.statusText}`);
+  }
 }
 
 async function saveSession(session) {
@@ -371,6 +375,12 @@ export default function App() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
+  });
   const resultsRef = useRef(null);
 
   // Get current assessment config (from session or default)
@@ -380,9 +390,25 @@ export default function App() {
   useEffect(() => { if (view === "admin") loadSessions(); }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
 
-  const loadSessions = async () => { setLoading(true); const s = await loadAllSessions(); setSessions(s); setLoading(false); };
+  const loadSessions = async () => {
+    setLoading(true);
+    const s = await loadAllSessions();
+    setSessions(s);
+    // Compute notifications: completed sessions not yet seen
+    const unseen = s.filter(sess => sess.status === "completed" && !seenCompletedCodes.includes(sess.code));
+    setNotifications(unseen);
+    setLoading(false);
+  };
+
+  const markNotificationSeen = (code) => {
+    const updated = [...seenCompletedCodes, code];
+    setSeenCompletedCodes(updated);
+    localStorage.setItem("amarillo_seen_completed", JSON.stringify(updated));
+    setNotifications(prev => prev.filter(n => n.code !== code));
+  };
 
   const createSession = async () => {
+    setAdminError("");
     const code = generateCode();
     const session = {
       code, candidateName: newName, candidateRole: newRole, format: newFormat,
@@ -390,7 +416,11 @@ export default function App() {
       status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
       totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
     };
-    await saveSession(session);
+    const ok = await saveSession(session);
+    if (!ok) {
+      setAdminError("Erreur lors de la sauvegarde (403). Verifiez la cle API JSONBin ou le quota du compte.");
+      return;
+    }
     setNewName(""); setNewRole("");
     await loadSessions();
   };
@@ -884,7 +914,69 @@ export default function App() {
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
             <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#FECC02", margin: 0 }}>Administration</h2>
-            <button onClick={() => { setView("landing"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {/* Notification bell */}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowNotifications(!showNotifications)}
+                  style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "8px 10px", cursor: "pointer", position: "relative", display: "flex", alignItems: "center" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={notifications.length > 0 ? "#FECC02" : "#666"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 01-3.46 0"/>
+                  </svg>
+                  {notifications.length > 0 && (
+                    <span style={{
+                      position: "absolute", top: -6, right: -6, background: "#e74c3c", color: "#fff",
+                      fontSize: 10, fontWeight: 700, minWidth: 18, height: 18, borderRadius: 9,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: "'DM Mono', monospace", lineHeight: 1,
+                    }}>
+                      {notifications.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notification dropdown */}
+                {showNotifications && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, maxHeight: 400, overflowY: "auto",
+                    background: "#1a1b1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2,
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 100,
+                  }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", fontFamily: "'DM Mono', monospace" }}>
+                      Notifications {notifications.length > 0 && `(${notifications.length})`}
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: "24px 16px", textAlign: "center", color: "#555", fontSize: 13 }}>Aucune nouvelle notification</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.code} style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.15s" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(254,204,2,0.06)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                          onClick={async () => {
+                            const full = await loadSession(n.code);
+                            if (full) {
+                              markNotificationSeen(n.code);
+                              setShowNotifications(false);
+                              setCurrentSession(full);
+                              setIsAdminView(true);
+                              setView("results");
+                            }
+                          }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 4, background: "#52B788", flexShrink: 0 }} />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{n.name}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#888", paddingLeft: 16 }}>
+                            {n.role} · {n.code} · Test termine
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { setView("landing"); setAdminPwd(""); setShowNotifications(false); }} style={btnOutline}>← Accueil</button>
+            </div>
           </div>
 
           <div style={{ ...box, padding: 32, marginBottom: 40 }}>
@@ -941,6 +1033,11 @@ export default function App() {
             <button onClick={createSession} disabled={!newName.trim()} style={{ ...btn(!!newName.trim()), width: "100%" }}>
               Générer le code d'accès
             </button>
+            {adminError && (
+              <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 12, padding: "10px 14px", background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.2)", borderRadius: 2 }}>
+                {adminError}
+              </p>
+            )}
           </div>
 
           <div style={{ ...box, padding: 32 }}>

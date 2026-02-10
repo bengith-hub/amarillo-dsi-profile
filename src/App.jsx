@@ -83,7 +83,7 @@ async function readBin() {
 }
 
 async function updateBin(record) {
-  await fetch(`${JSONBIN_BASE}/b/${JSONBIN_BIN_ID}`, {
+  const res = await fetch(`${JSONBIN_BASE}/b/${JSONBIN_BIN_ID}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -91,12 +91,21 @@ async function updateBin(record) {
     },
     body: JSON.stringify(record)
   });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(`JSONBin ${res.status}: ${msg || res.statusText}`);
+  }
 }
 
 async function saveSession(session) {
   try {
     const record = await readBin();
-    record.sessions[session.code] = session;
+    // Strip full question texts from completed sessions to save JSONBin space
+    const toStore = { ...session };
+    if (toStore.status === "completed" && toStore.questions) {
+      toStore.questions = toStore.questions.map(q => ({ dim: q.dim, order: q.order, idx: q.idx, ...(q.mirrorOf ? { mirrorOf: q.mirrorOf } : {}) }));
+    }
+    record.sessions[toStore.code] = toStore;
     const idx = record.index.findIndex(s => s.code === session.code);
     const summary = {
       code: session.code,
@@ -137,8 +146,46 @@ async function loadAllSessions() {
   }
 }
 
+async function deleteSession(code) {
+  try {
+    const record = await readBin();
+    delete record.sessions[code];
+    record.index = (record.index || []).filter(s => s.code !== code);
+    await updateBin(record);
+    return true;
+  } catch (e) {
+    console.error("Delete error:", e);
+    return false;
+  }
+}
+
 // --- COMPONENTS ---
-const RANK_WEIGHTS = [1.0, 0.66, 0.33, 0.0];
+const RANK_WEIGHTS = [1.0, 0.50, 0.15, 0.0];
+
+// Scoring normalization constants (based on RANK_WEIGHTS with scores [1,2,3,4])
+const WEIGHT_SUM = RANK_WEIGHTS.reduce((a, b) => a + b, 0);
+const SCORE_THEORETICAL_MIN = (1 * RANK_WEIGHTS[0] + 2 * RANK_WEIGHTS[1] + 3 * RANK_WEIGHTS[2] + 4 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
+const SCORE_THEORETICAL_MAX = (4 * RANK_WEIGHTS[0] + 3 * RANK_WEIGHTS[1] + 2 * RANK_WEIGHTS[2] + 1 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
+const SCORE_RANDOM_EXPECTED = 2.5;
+
+function normalizeScore(raw) {
+  return Math.round(Math.max(0, Math.min(100, ((raw - SCORE_THEORETICAL_MIN) / (SCORE_THEORETICAL_MAX - SCORE_THEORETICAL_MIN)) * 100)));
+}
+
+// Significance vs random: compute z-score using permutation variance
+// Var[single_question] = (1/(n-1)) * Σ(w_i - w̄)² * Σ(s_j - s̄)² / (Σw)²
+// where n=4, s=[1,2,3,4], w=RANK_WEIGHTS
+function computeSignificance(globalScore, questionsPerDim) {
+  const n = 4;
+  const wMean = WEIGHT_SUM / n;
+  const wVar = RANK_WEIGHTS.reduce((s, w) => s + (w - wMean) ** 2, 0);
+  const sVar = [1,2,3,4].reduce((s, v) => s + (v - 2.5) ** 2, 0); // = 5.0
+  const varSingle = (1 / (n - 1)) * wVar * sVar / (WEIGHT_SUM ** 2);
+  const varGlobal = varSingle / (questionsPerDim * 12);
+  const sigma = Math.sqrt(varGlobal);
+  const zScore = sigma > 0 ? (globalScore - SCORE_RANDOM_EXPECTED) / sigma : 0;
+  return { zScore, sigma };
+}
 
 function RankingCard({ question, dimColor, onComplete }) {
   const [ranked, setRanked] = useState([]);
@@ -247,12 +294,19 @@ function getAnalysis(scores, assessment) {
   // Top 3 profiles by weighted score (for display)
   const topProfiles = [...profileMatches].sort((a, b) => b.weightedScore - a.weightedScore).slice(0, 3);
 
+  // Normalized scores (0-100 scale)
+  const avgNorm = normalizeScore(avg);
+  const pillarScoresNorm = ps.map(s => normalizeScore(s));
+  const scoresNorm = {};
+  Object.entries(scores).forEach(([id, s]) => { scoresNorm[id] = normalizeScore(s); });
+
   return {
     top3, bottom3, avg, pillarScores: ps,
     profile: match.name, description: match.description,
     strengths: match.strengths, development: match.development, context: match.context,
     matchPct: match.pct,
     topProfiles,
+    avgNorm, pillarScoresNorm, scoresNorm,
   };
 }
 
@@ -339,6 +393,14 @@ export default function App() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
+  });
   const resultsRef = useRef(null);
 
   // Get current assessment config (from session or default)
@@ -348,19 +410,60 @@ export default function App() {
   useEffect(() => { if (view === "admin") loadSessions(); }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
 
-  const loadSessions = async () => { setLoading(true); const s = await loadAllSessions(); setSessions(s); setLoading(false); };
+  const loadSessions = async () => {
+    setLoading(true);
+    const s = await loadAllSessions();
+    setSessions(s);
+    // Compute notifications: completed sessions not yet seen
+    const unseen = s.filter(sess => sess.status === "completed" && !seenCompletedCodes.includes(sess.code));
+    setNotifications(unseen);
+    setLoading(false);
+  };
+
+  const markNotificationSeen = (code) => {
+    const updated = [...seenCompletedCodes, code];
+    setSeenCompletedCodes(updated);
+    localStorage.setItem("amarillo_seen_completed", JSON.stringify(updated));
+    setNotifications(prev => prev.filter(n => n.code !== code));
+  };
+
+  const handleDeleteSession = async (code) => {
+    setDeleting(true);
+    const ok = await deleteSession(code);
+    setDeleting(false);
+    setDeleteConfirm(null);
+    if (ok) {
+      await loadSessions();
+    } else {
+      setAdminError("Erreur lors de la suppression. Réessayez.");
+    }
+  };
 
   const createSession = async () => {
-    const code = generateCode();
-    const session = {
-      code, candidateName: newName, candidateRole: newRole, format: newFormat,
-      assessmentType: adminAssessmentType,
-      status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
-      totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
-    };
-    await saveSession(session);
-    setNewName(""); setNewRole("");
-    await loadSessions();
+    setAdminError("");
+    setLoading(true);
+    try {
+      const code = generateCode();
+      const session = {
+        code, candidateName: newName, candidateRole: newRole, format: newFormat,
+        assessmentType: adminAssessmentType,
+        status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
+        totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
+      };
+      const ok = await saveSession(session);
+      if (!ok) {
+        setAdminError("Erreur lors de la sauvegarde. Vérifiez la clé API JSONBin ou le quota du compte.");
+        setLoading(false);
+        return;
+      }
+      setNewName(""); setNewRole("");
+      await loadSessions();
+    } catch (e) {
+      console.error("Create session error:", e);
+      setAdminError(`Erreur lors de la création : ${e.message || "erreur inconnue"}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const startQuiz = (session) => {
@@ -415,9 +518,18 @@ export default function App() {
   const computeScores = () => {
     if (!currentSession) return {};
     const scores = {};
+    const DEVIATION_ALPHA = 1.0;
     currentAssessment.dimensions.forEach((dim) => {
       const arr = currentSession.answers[dim.id] || [];
-      scores[dim.id] = arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      if (arr.length === 0) { scores[dim.id] = 0; return; }
+      // Non-linear deviation weighting: answers far from random (2.5) count more
+      let wSum = 0, wsSum = 0;
+      arr.forEach(s => {
+        const w = 1 + DEVIATION_ALPHA * Math.abs(s - SCORE_RANDOM_EXPECTED);
+        wsSum += s * w;
+        wSum += w;
+      });
+      scores[dim.id] = wsSum / wSum;
     });
     return scores;
   };
@@ -564,6 +676,165 @@ export default function App() {
     logos.forEach((img, idx) => { img.src = originalSrcs[idx]; });
   };
 
+  const handleDownloadExecutivePDF = async () => {
+    if (!currentSession || !currentAssessment) return;
+    const scores = computeScores();
+    const analysis = getAnalysis(scores, currentAssessment);
+    const reliability = computeReliability(currentSession, currentAssessment);
+    const fmt = currentAssessment.formats[currentSession.format] || currentAssessment.formats.standard;
+    const sig = computeSignificance(analysis.avg, fmt.questionsPerDim);
+    const absZ = Math.abs(sig.zScore);
+    const sigLabel = absZ >= 3 ? "Hautement significatif" : absZ >= 2 ? "Significatif" : absZ >= 1 ? "Faiblement significatif" : "Non significatif";
+
+    // Build radar SVG (light theme, compact)
+    const dims = currentAssessment.dimensions;
+    const n = dims.length, sz = 200, pad = 60, vw = sz + pad * 2, cx = vw / 2, r = sz * 0.38;
+    const pt = (i, v) => { const a = (Math.PI * 2 * i) / n - Math.PI / 2; return { x: cx + (v / 4) * r * Math.cos(a), y: cx + (v / 4) * r * Math.sin(a) }; };
+    const gridPolys = [1,2,3,4].map(l => `<polygon points="${dims.map((_,i) => { const p=pt(i,l); return `${p.x},${p.y}`; }).join(" ")}" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>`).join("");
+    const radials = dims.map((d,i) => { const p=pt(i,4); return `<line x1="${cx}" y1="${cx}" x2="${p.x}" y2="${p.y}" stroke="rgba(0,0,0,0.05)" stroke-width="1"/>`; }).join("");
+    const area = `<polygon points="${dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `${p.x},${p.y}`; }).join(" ")}" fill="rgba(254,204,2,0.15)" stroke="#C9A200" stroke-width="2"/>`;
+    const dots = dims.map((d,i) => { const p=pt(i,scores[d.id]||0); return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${d.color}" stroke="#fff" stroke-width="1"/>`; }).join("");
+    const labels = dims.map((d,i) => { const p=pt(i,5.2); const a=(360*i)/n-90; const anch = Math.abs(a+90)<15||Math.abs(a-90)<15 ? "middle" : (a>-90&&a<90) ? "start" : "end"; const bl = (a>0&&a<180) ? "hanging" : "auto"; return `<text x="${p.x}" y="${p.y}" text-anchor="${anch}" dominant-baseline="${bl}" fill="#555" font-size="8" font-family="sans-serif">${d.icon} ${d.name}</text>`; }).join("");
+    const radarSVG = `<svg viewBox="0 0 ${vw} ${vw}" width="280" height="280" xmlns="http://www.w3.org/2000/svg">${gridPolys}${radials}${area}${dots}${labels}</svg>`;
+
+    const pillarsHTML = currentAssessment.pillars.map((p, i) =>
+      `<div style="flex:1;text-align:center;padding:8px 12px;background:${p.color}0a;border:1px solid ${p.color}33;border-radius:2px">
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:${p.color};margin-bottom:4px;font-weight:600">${p.name}</div>
+        <div style="font-size:28px;font-weight:700;color:#1a1a1a">${analysis.pillarScoresNorm[i]}</div>
+        <div style="font-size:10px;color:#888">/100</div>
+      </div>`
+    ).join("");
+
+    const top3HTML = analysis.top3.map(d =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+        <span style="color:#333">${d.icon} ${d.name}</span>
+        <span style="color:#2D6A4F;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+      </div>`
+    ).join("");
+
+    const bottom3HTML = analysis.bottom3.map(d =>
+      `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:11px">
+        <span style="color:#333">${d.icon} ${d.name}</span>
+        <span style="color:#8B7000;font-weight:700;font-family:monospace">${analysis.scoresNorm[d.id]}/100</span>
+      </div>`
+    ).join("");
+
+    const topProfilesHTML = analysis.topProfiles.map((tp, i) =>
+      `<span style="display:inline-block;padding:3px 8px;margin-right:6px;background:${i===0?'#FECC0215':'#f5f5f5'};border:1px solid ${i===0?'#FECC0244':'#e0e0e0'};border-radius:2px;font-size:10px;font-family:monospace">
+        ${tp.name} ${tp.pct}%
+      </span>`
+    ).join("");
+
+    // Reliability badges
+    let reliabilityHTML = "";
+    if (reliability) {
+      const cohColor = reliability.coherenceLevel.color;
+      const desColor = reliability.desirabilityLevel.color;
+      const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
+      reliabilityHTML = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
+            Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
+          </span>
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
+            Desirabilite ${reliability.desirabilityScore}% — ${reliability.desirabilityLevel.label}
+          </span>
+          <span style="font-size:9px;padding:3px 8px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
+            Significativite z=${sig.zScore.toFixed(1)} — ${sigLabel}
+          </span>
+        </div>`;
+    }
+
+    const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
+
+    const html = `
+      <div id="exec-pdf" style="width:780px;padding:28px 32px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff">
+        <!-- Header -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #FECC02;padding-bottom:12px;margin-bottom:16px">
+          <div>
+            <img src="${amarilloLogoDark}" style="height:28px;margin-bottom:4px" />
+            <div style="font-size:16px;font-weight:700;color:#1a1a1a">Synthese Candidat(e)</div>
+          </div>
+          <div style="text-align:right;font-size:10px;color:#888;font-family:monospace">
+            <div>${currentSession.code}</div>
+            <div>${dateStr} · ${fmt.label}</div>
+            <div>Poste : ${currentSession.candidateRole || currentAssessment.defaultRole}</div>
+          </div>
+        </div>
+
+        <!-- Profile + Score -->
+        <div style="display:flex;gap:16px;margin-bottom:14px;align-items:center">
+          <div style="flex:1">
+            <div style="display:inline-block;background:#FECC02;color:#1a1a1a;padding:4px 12px;border-radius:2px;font-size:14px;font-weight:700;margin-bottom:8px">${analysis.profile}</div>
+            <div style="display:flex;gap:10px;margin-bottom:8px">
+              <span style="padding:4px 10px;background:#1a1a1a;color:#FECC02;border-radius:2px;font-size:12px;font-family:monospace;font-weight:700">Indice global : ${analysis.avgNorm}/100</span>
+              <span style="padding:4px 10px;background:#f5f5f5;border-radius:2px;font-size:12px;font-family:monospace">Correspondance : ${analysis.matchPct}%</span>
+            </div>
+            <div style="font-size:10px;color:#888;margin-bottom:6px">${topProfilesHTML}</div>
+          </div>
+        </div>
+
+        <!-- Pillars -->
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          ${pillarsHTML}
+        </div>
+
+        <!-- Radar + Synthesis side by side -->
+        <div style="display:flex;gap:14px;margin-bottom:14px">
+          <div style="flex:0 0 280px;text-align:center">
+            ${radarSVG}
+          </div>
+          <div style="flex:1;display:flex;gap:10px">
+            <div style="flex:1;padding:10px 12px;background:#f8fdf8;border:1px solid #d4edda;border-radius:2px">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#2D6A4F;font-weight:700;margin-bottom:8px">Points forts</div>
+              ${top3HTML}
+            </div>
+            <div style="flex:1;padding:10px 12px;background:#fffdf5;border:1px solid #ffeeba;border-radius:2px">
+              <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#8B7000;font-weight:700;margin-bottom:8px">Axes de developpement</div>
+              ${bottom3HTML}
+            </div>
+          </div>
+        </div>
+
+        <!-- Reliability -->
+        <div style="padding:8px 12px;background:#fafafa;border:1px solid #eee;border-radius:2px;margin-bottom:12px">
+          <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px">Indicateurs de fiabilite</div>
+          ${reliabilityHTML}
+        </div>
+
+        <!-- Footer -->
+        <div style="text-align:center;padding-top:8px;border-top:1px solid #eee;font-size:9px;color:#aaa">
+          ${currentAssessment.label} · Rapport confidentiel · ${currentSession.code}
+        </div>
+      </div>
+    `;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.top = "-9999px";
+    container.style.left = "-9999px";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const el = container.querySelector("#exec-pdf");
+
+    try {
+      await new Promise(r => setTimeout(r, 150));
+      const html2pdf = (await import("html2pdf.js")).default;
+      const opt = {
+        margin: [8, 8, 8, 8],
+        filename: `${currentAssessment.pdfPrefix}_SYNTHESE_${currentSession.code}.pdf`,
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: 850 },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+      };
+      await html2pdf().set(opt).from(el).save();
+    } catch (err) {
+      console.error("Executive PDF generation error:", err);
+    }
+    document.body.removeChild(container);
+  };
+
   const handleSendEmail = async () => {
     if (!candidateEmail.includes("@") || emailSending) return;
     setEmailSending(true);
@@ -684,7 +955,69 @@ export default function App() {
         <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 40 }}>
             <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 28, color: "#FECC02", margin: 0 }}>Administration</h2>
-            <button onClick={() => { setView("landing"); setAdminPwd(""); }} style={btnOutline}>← Accueil</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {/* Notification bell */}
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowNotifications(!showNotifications)}
+                  style={{ background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "8px 10px", cursor: "pointer", position: "relative", display: "flex", alignItems: "center" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={notifications.length > 0 ? "#FECC02" : "#666"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 01-3.46 0"/>
+                  </svg>
+                  {notifications.length > 0 && (
+                    <span style={{
+                      position: "absolute", top: -6, right: -6, background: "#e74c3c", color: "#fff",
+                      fontSize: 10, fontWeight: 700, minWidth: 18, height: 18, borderRadius: 9,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: "'DM Mono', monospace", lineHeight: 1,
+                    }}>
+                      {notifications.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notification dropdown */}
+                {showNotifications && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 8px)", right: 0, width: 340, maxHeight: 400, overflowY: "auto",
+                    background: "#1a1b1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2,
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 100,
+                  }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", fontFamily: "'DM Mono', monospace" }}>
+                      Notifications {notifications.length > 0 && `(${notifications.length})`}
+                    </div>
+                    {notifications.length === 0 ? (
+                      <div style={{ padding: "24px 16px", textAlign: "center", color: "#555", fontSize: 13 }}>Aucune nouvelle notification</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.code} style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer", transition: "background 0.15s" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(254,204,2,0.06)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                          onClick={async () => {
+                            const full = await loadSession(n.code);
+                            if (full) {
+                              markNotificationSeen(n.code);
+                              setShowNotifications(false);
+                              setCurrentSession(full);
+                              setIsAdminView(true);
+                              setView("results");
+                            }
+                          }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 4, background: "#52B788", flexShrink: 0 }} />
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{n.name}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#888", paddingLeft: 16 }}>
+                            {n.role} · {n.code} · Test termine
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => { setView("landing"); setAdminPwd(""); setShowNotifications(false); }} style={btnOutline}>← Accueil</button>
+            </div>
           </div>
 
           <div style={{ ...box, padding: 32, marginBottom: 40 }}>
@@ -738,9 +1071,14 @@ export default function App() {
               ))}
             </div>
 
-            <button onClick={createSession} disabled={!newName.trim()} style={{ ...btn(!!newName.trim()), width: "100%" }}>
-              Générer le code d'accès
+            <button onClick={createSession} disabled={!newName.trim() || loading} style={{ ...btn(!!newName.trim() && !loading), width: "100%" }}>
+              {loading ? "Création en cours..." : "Générer le code d'accès"}
             </button>
+            {adminError && (
+              <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 12, padding: "10px 14px", background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.2)", borderRadius: 2 }}>
+                {adminError}
+              </p>
+            )}
           </div>
 
           <div style={{ ...box, padding: 32 }}>
@@ -771,11 +1109,42 @@ export default function App() {
                         Voir résultats
                       </button>
                     )}
+                    <button onClick={() => setDeleteConfirm(s.code)}
+                      style={{ ...btnOutline, padding: "6px 10px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}
+                      title="Supprimer cette session">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Delete confirmation modal */}
+          {deleteConfirm && (
+            <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+              onClick={() => !deleting && setDeleteConfirm(null)}>
+              <div style={{ background: "#1a1b1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: 32, maxWidth: 420, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+                onClick={e => e.stopPropagation()}>
+                <h3 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: "#f0f0f0", marginBottom: 12 }}>Supprimer cette session ?</h3>
+                <p style={{ fontSize: 13, color: "#888", lineHeight: 1.6, marginBottom: 8 }}>
+                  Session <span style={{ fontFamily: "'DM Mono', monospace", color: "#FECC02", fontWeight: 700 }}>{deleteConfirm}</span>
+                </p>
+                <p style={{ fontSize: 13, color: "#e74c3c", lineHeight: 1.6, marginBottom: 24 }}>
+                  Cette action est irréversible. Toutes les données de cette session seront définitivement supprimées.
+                </p>
+                <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                  <button onClick={() => setDeleteConfirm(null)} disabled={deleting} style={btnOutline}>Annuler</button>
+                  <button onClick={() => handleDeleteSession(deleteConfirm)} disabled={deleting}
+                    style={{ padding: "12px 24px", fontSize: 13, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: deleting ? "rgba(231,76,60,0.3)" : "#e74c3c", color: "#fff", border: "none", borderRadius: 2, cursor: deleting ? "default" : "pointer" }}>
+                    {deleting ? "Suppression..." : "Supprimer"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Methodology section */}
           {adminAssessment.methodology && (
@@ -859,10 +1228,13 @@ export default function App() {
               <h2 data-profile-title style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 24, marginBottom: 12, color: "#FECC02" }}>{analysis.profile}</h2>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
                 <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
-                  Score global : {analysis.avg.toFixed(2)} / 4.00
+                  Indice global : {analysis.avgNorm}/100
                 </div>
                 <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                   Correspondance : {analysis.matchPct}%
+                </div>
+                <div data-score-badge style={{ padding: "6px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#666" }}>
+                  Score brut : {analysis.avg.toFixed(2)} / 4.00
                 </div>
               </div>
               <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
@@ -902,8 +1274,9 @@ export default function App() {
               {currentAssessment.pillars.map((p, i) => (
                 <div key={i} style={{ flex: "1 1 250px", padding: "24px 28px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2 }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
-                  <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScores[i].toFixed(2)}</div>
-                  <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/4.00</div>
+                  <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScoresNorm[i]}</div>
+                  <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/100</div>
+                  <div style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>({analysis.pillarScores[i].toFixed(2)} / 4.00)</div>
                 </div>
               ))}
             </div>
@@ -921,7 +1294,7 @@ export default function App() {
                 {analysis.top3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <span data-dim-label>{dim.icon} {dim.name}</span>
-                    <span data-synth-score="green" style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-synth-score="green" style={{ color: "#52B788", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{analysis.scoresNorm[dim.id]}/100</span>
                   </div>
                 ))}
               </div>
@@ -930,7 +1303,7 @@ export default function App() {
                 {analysis.bottom3.map(dim => (
                   <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", color: "#aaa", fontSize: 14, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                     <span data-dim-label>{dim.icon} {dim.name}</span>
-                    <span data-synth-score="yellow" style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{scores[dim.id].toFixed(2)}</span>
+                    <span data-synth-score="yellow" style={{ color: "#FECC02", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{analysis.scoresNorm[dim.id]}/100</span>
                   </div>
                 ))}
               </div>
@@ -981,6 +1354,37 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Significance vs random */}
+                {(() => {
+                  const fmt = currentAssessment.formats[currentSession.format] || currentAssessment.formats.standard;
+                  const sig = computeSignificance(analysis.avg, fmt.questionsPerDim);
+                  const absZ = Math.abs(sig.zScore);
+                  const sigLabel = absZ >= 3 ? "Hautement significatif" : absZ >= 2 ? "Significatif" : absZ >= 1 ? "Faiblement significatif" : "Non significatif";
+                  const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
+                  const sigIcon = absZ >= 2 ? "✓" : absZ >= 1 ? "⚠" : "🚨";
+                  return (
+                    <div style={{ flex: "1 1 280px", marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, color: "#ccc" }}>Significativité vs. hasard</span>
+                        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, color: sigColor }}>
+                          z = {sig.zScore.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                        <div style={{ height: "100%", borderRadius: 4, width: `${Math.min(100, absZ / 4 * 100)}%`, background: sigColor, transition: "width 1s ease" }} />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${sigColor}22`, color: sigColor, fontFamily: "'DM Mono', monospace" }}>
+                          {sigIcon} {sigLabel}
+                        </span>
+                        <span style={{ fontSize: 11, color: "#555" }}>
+                          {absZ >= 2 ? "Résultat fiable, nettement au-dessus du hasard" : absZ >= 1 ? "Résultat à interpréter avec prudence" : "Score proche d'une réponse aléatoire"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Detail: coherence pairs */}
                 <details style={{ marginTop: 8 }}>
                   <summary style={{ fontSize: 12, color: "#666", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>Détail des paires miroir</summary>
@@ -1025,8 +1429,13 @@ export default function App() {
               <p style={{ fontSize: 12, color: "#444", marginBottom: 16 }}>Rapport confidentiel · Code session : {currentSession.code}</p>
               <div data-pdf-hide-btns="true" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
-                  📄 Télécharger PDF
+                  📄 Telecharger PDF
                 </button>
+                {isAdminView && (
+                  <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
+                    📋 PDF Dirigeant (anonyme)
+                  </button>
+                )}
                 <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
               </div>
             </div>

@@ -258,14 +258,15 @@ function RadarChart({ scores, dimensions, size = 440 }) {
 }
 
 function ScoreBar({ dimension, score }) {
+  const norm = normalizeScore(score);
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
         <span data-dim-label style={{ color: "#d0d0d0", fontSize: 13 }}>{dimension.icon} {dimension.name}</span>
-        <span data-score-value style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{score.toFixed(2)}/4</span>
+        <span data-score-value style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{norm}/100</span>
       </div>
       <div data-bar-bg style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>
-        <div style={{ height: "100%", borderRadius: 4, width: `${(score/4)*100}%`, background: `linear-gradient(90deg, ${dimension.color}, ${dimension.color}cc)`, transition: "width 1s ease" }} />
+        <div style={{ height: "100%", borderRadius: 4, width: `${norm}%`, background: `linear-gradient(90deg, ${dimension.color}, ${dimension.color}cc)`, transition: "width 1s ease" }} />
       </div>
     </div>
   );
@@ -518,18 +519,10 @@ export default function App() {
   const computeScores = () => {
     if (!currentSession) return {};
     const scores = {};
-    const DEVIATION_ALPHA = 1.0;
     currentAssessment.dimensions.forEach((dim) => {
       const arr = currentSession.answers[dim.id] || [];
       if (arr.length === 0) { scores[dim.id] = 0; return; }
-      // Non-linear deviation weighting: answers far from random (2.5) count more
-      let wSum = 0, wsSum = 0;
-      arr.forEach(s => {
-        const w = 1 + DEVIATION_ALPHA * Math.abs(s - SCORE_RANDOM_EXPECTED);
-        wsSum += s * w;
-        wSum += w;
-      });
-      scores[dim.id] = wsSum / wSum;
+      scores[dim.id] = arr.reduce((a, b) => a + b, 0) / arr.length;
     });
     return scores;
   };
@@ -1233,9 +1226,6 @@ export default function App() {
                 <div data-score-badge style={{ padding: "6px 16px", background: "rgba(254,204,2,0.08)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 14, color: "#FECC02" }}>
                   Correspondance : {analysis.matchPct}%
                 </div>
-                <div data-score-badge style={{ padding: "6px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#666" }}>
-                  Score brut : {analysis.avg.toFixed(2)} / 4.00
-                </div>
               </div>
               <p style={{ color: "#bbb", lineHeight: 1.8, fontSize: 15, marginBottom: 20 }}>{analysis.description}</p>
 
@@ -1276,7 +1266,6 @@ export default function App() {
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: p.color, marginBottom: 12 }}>{p.name}</div>
                   <div data-pillar-score style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 36, color: "#f0f0f0" }}>{analysis.pillarScoresNorm[i]}</div>
                   <div data-pillar-unit style={{ fontSize: 12, color: "#666" }}>/100</div>
-                  <div style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>({analysis.pillarScores[i].toFixed(2)} / 4.00)</div>
                 </div>
               ))}
             </div>

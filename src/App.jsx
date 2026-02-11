@@ -351,10 +351,6 @@ function computeReliability(session, assessment) {
   const desirabilityRaw = desScores.length > 0
     ? desScores.reduce((a, b) => a + b, 0) / desScores.length
     : null;
-  // Invert: high raw score = low desirability (sincere), low raw score = high desirability
-  // score 1 = picked the "too perfect" answer first → high desirability
-  // score 4 = picked the honest/vulnerable answer first → low desirability
-  // Normalize: (4 - avg) / 3 * 100 → 0% = perfectly sincere, 100% = max desirability
   const desirabilityScore = desirabilityRaw !== null
     ? Math.round(Math.max(0, Math.min(100, ((4 - desirabilityRaw) / 3) * 100)))
     : null;
@@ -362,9 +358,21 @@ function computeReliability(session, assessment) {
     ? (config.desirabilityLevels || []).find(l => desirabilityScore <= l.max) || { label: "—", color: "#888" }
     : { label: "—", color: "#888" };
 
+  // --- Response time analysis ---
+  const totalTimeMs = session.totalTimeMs || 0;
+  const totalQuestions = sessionQuestions.length || 1;
+  const avgTimePerQ = Math.round(totalTimeMs / totalQuestions / 1000); // seconds
+  // Thresholds: < 8s = suspect (rushing/random), 8-12s = rapide, > 12s = normal
+  const timeLevel = avgTimePerQ < 8
+    ? { label: "Réponses trop rapides", color: "#e74c3c", icon: "🚨", description: "Temps insuffisant pour une lecture attentive" }
+    : avgTimePerQ < 12
+    ? { label: "Rythme rapide", color: "#FECC02", icon: "⚠", description: "Réponses rapides mais plausibles" }
+    : { label: "Rythme normal", color: "#52B788", icon: "✓", description: "Temps de réflexion suffisant" };
+
   return {
     coherenceIndex, coherencePairs: pairs, coherenceLevel,
     desirabilityScore, desirabilityLevel,
+    avgTimePerQ, timeLevel,
   };
 }
 
@@ -727,8 +735,12 @@ export default function App() {
       const cohColor = reliability.coherenceLevel.color;
       const desColor = reliability.desirabilityLevel.color;
       const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
+      const timeColor = reliability.timeLevel.color;
       reliabilityHTML = `
         <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${timeColor}18;color:${timeColor};font-family:monospace">
+            Temps moyen ${reliability.avgTimePerQ}s/question — ${reliability.timeLevel.label}
+          </span>
           <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
             Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
           </span>
@@ -1360,6 +1372,29 @@ export default function App() {
                     <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${reliability.desirabilityLevel.color}22`, color: reliability.desirabilityLevel.color, fontFamily: "'DM Mono', monospace" }}>
                       {reliability.desirabilityScore <= 50 ? "✓" : reliability.desirabilityScore <= 75 ? "⚠" : "🚨"} {reliability.desirabilityLevel.label}
                     </span>
+                  </div>
+                </div>
+
+                {/* Response time indicator */}
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 24 }}>
+                  <div style={{ flex: "1 1 280px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: "#ccc" }}>Temps moyen par question</span>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 14, fontWeight: 700, color: reliability.timeLevel.color }}>
+                        {reliability.avgTimePerQ}s
+                      </span>
+                    </div>
+                    <div style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", marginBottom: 8 }}>
+                      <div style={{ height: "100%", borderRadius: 4, width: `${Math.min(100, (reliability.avgTimePerQ / 30) * 100)}%`, background: reliability.timeLevel.color, transition: "width 1s ease" }} />
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 2, background: `${reliability.timeLevel.color}22`, color: reliability.timeLevel.color, fontFamily: "'DM Mono', monospace" }}>
+                        {reliability.timeLevel.icon} {reliability.timeLevel.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#555" }}>
+                        {reliability.timeLevel.description}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

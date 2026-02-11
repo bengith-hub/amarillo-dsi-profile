@@ -122,7 +122,7 @@ const dsi = {
 
   // Reliability configuration: coherence index + social desirability
   reliabilityConfig: {
-    coherenceThreshold: 0.8,  // max acceptable gap between mirror pairs (on weighted 1.48-3.52 scale)
+    coherenceThreshold: 0.6,  // max acceptable gap between mirror pairs (on weighted 1.48-3.52 scale)
     desirabilityLevels: [
       { max: 55, label: "Sincère", color: "#52B788" },
       { max: 75, label: "Tendance à embellir", color: "#FECC02" },

@@ -1512,11 +1512,19 @@ export default function App() {
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
                   📄 Telecharger PDF
                 </button>
-                {isAdminView && (
-                  <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
-                    📋 PDF Dirigeant (anonyme)
-                  </button>
-                )}
+                {isAdminView && (() => {
+                  const reliab = computeReliability(currentSession, currentAssessment);
+                  const canExport = reliab && reliab.globalVerdict.color === "#52B788";
+                  return canExport ? (
+                    <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
+                      📋 PDF Dirigeant (anonyme)
+                    </button>
+                  ) : (
+                    <span style={{ padding: "12px 24px", fontSize: 12, fontFamily: "'DM Mono', monospace", color: "#666", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                      📋 PDF Dirigeant indisponible — fiabilité insuffisante
+                    </span>
+                  );
+                })()}
                 <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
               </div>
             </div>

@@ -747,18 +747,36 @@ export default function App() {
 
     const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
 
-    // Build narrative synthesis paragraph for directors
+    // Build narrative synthesis for directors (structured with bullet points)
     const topDimNames = analysis.top3.map(d => d.name).join(", ");
     const bottomDimNames = analysis.bottom3.map(d => d.name).join(", ");
     const pillarNames = currentAssessment.pillars.map(p => p.name);
     const strongestPillarIdx = analysis.pillarScoresNorm.indexOf(Math.max(...analysis.pillarScoresNorm));
     const weakestPillarIdx = analysis.pillarScoresNorm.indexOf(Math.min(...analysis.pillarScoresNorm));
-    const synthesisParagraph = `Ce(tte) candidat(e), évalué(e) sur ${currentAssessment.dimensions.length} dimensions comportementales, présente un profil de type <b>${analysis.profile}</b> avec un indice global de <b>${analysis.avgNorm}/100</b>. `
-      + `Son pilier le plus marqué est <b>${pillarNames[strongestPillarIdx]}</b> (${analysis.pillarScoresNorm[strongestPillarIdx]}/100), `
-      + `tandis que <b>${pillarNames[weakestPillarIdx]}</b> (${analysis.pillarScoresNorm[weakestPillarIdx]}/100) constitue le principal axe de progression. `
-      + `Les dimensions dominantes sont ${topDimNames}. `
-      + `Les axes de développement prioritaires portent sur ${bottomDimNames}. `
-      + `${analysis.description}`;
+
+    const synthesisHTML = `
+      <div style="font-size:9.5px;line-height:1.7;color:#444">
+        <p style="margin:0 0 8px 0"><b>${analysis.profile}</b> — Indice global : <b>${analysis.avgNorm}/100</b> · Correspondance : ${analysis.matchPct}%</p>
+        <table style="width:100%;border-collapse:collapse;font-size:9px;margin-bottom:8px">
+          <tr>
+            <td style="padding:3px 8px;color:#2D6A4F;font-weight:600;vertical-align:top;width:110px">Pilier dominant</td>
+            <td style="padding:3px 8px;color:#333">${pillarNames[strongestPillarIdx]} (${analysis.pillarScoresNorm[strongestPillarIdx]}/100)</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 8px;color:#8B7000;font-weight:600;vertical-align:top">Axe de progression</td>
+            <td style="padding:3px 8px;color:#333">${pillarNames[weakestPillarIdx]} (${analysis.pillarScoresNorm[weakestPillarIdx]}/100)</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 8px;color:#2D6A4F;font-weight:600;vertical-align:top">Points forts</td>
+            <td style="padding:3px 8px;color:#333">${topDimNames}</td>
+          </tr>
+          <tr>
+            <td style="padding:3px 8px;color:#8B7000;font-weight:600;vertical-align:top">A developper</td>
+            <td style="padding:3px 8px;color:#333">${bottomDimNames}</td>
+          </tr>
+        </table>
+        <p style="margin:0;color:#555;font-style:italic">${analysis.description}</p>
+      </div>`;
 
     const html = `
       <div id="exec-pdf" style="width:700px;padding:24px 28px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#333;background:#fff;box-sizing:border-box">
@@ -785,10 +803,10 @@ export default function App() {
           <div style="font-size:9px;color:#888">${topProfilesHTML}</div>
         </div>
 
-        <!-- Synthesis paragraph -->
+        <!-- Synthesis -->
         <div style="padding:10px 14px;background:#f9f9f9;border-left:3px solid #FECC02;border-radius:2px;margin-bottom:12px">
-          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px">Synthese</div>
-          <p style="font-size:9.5px;line-height:1.6;color:#444;margin:0">${synthesisParagraph}</p>
+          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:6px">Synthese</div>
+          ${synthesisHTML}
         </div>
 
         <!-- Pillars -->

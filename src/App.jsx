@@ -745,30 +745,6 @@ export default function App() {
       </span>`
     ).join("");
 
-    // Reliability badges
-    let reliabilityHTML = "";
-    if (reliability) {
-      const cohColor = reliability.coherenceLevel.color;
-      const desColor = reliability.desirabilityLevel.color;
-      const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
-      const timeColor = reliability.timeLevel.color;
-      reliabilityHTML = `
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${timeColor}18;color:${timeColor};font-family:monospace">
-            Temps moyen ${reliability.avgTimePerQ}s/question — ${reliability.timeLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
-            Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
-            Desirabilite ${reliability.desirabilityScore}% — ${reliability.desirabilityLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
-            Significativite z=${sig.zScore.toFixed(1)} — ${sigLabel}
-          </span>
-        </div>`;
-    }
-
     const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
 
     // Build narrative synthesis paragraph for directors
@@ -835,15 +811,6 @@ export default function App() {
               ${bottom3HTML}
             </div>
           </div>
-        </div>
-
-        <!-- Reliability -->
-        <div style="padding:6px 10px;background:${reliability ? reliability.globalVerdict.color + '08' : '#fafafa'};border:1px solid ${reliability ? reliability.globalVerdict.color + '33' : '#eee'};border-left:3px solid ${reliability ? reliability.globalVerdict.color : '#888'};border-radius:2px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600">Indicateurs de fiabilite</div>
-            ${reliability ? `<span style="font-size:9px;padding:2px 8px;border-radius:2px;background:${reliability.globalVerdict.color}20;color:${reliability.globalVerdict.color};font-weight:700;font-family:monospace">${reliability.globalVerdict.icon} ${reliability.globalVerdict.label}</span>` : ''}
-          </div>
-          ${reliabilityHTML}
         </div>
 
         <!-- Footer -->
@@ -1512,19 +1479,11 @@ export default function App() {
                 <button onClick={handleDownloadPDF} style={{ ...btnOutline, color: "#FECC02", borderColor: "#FECC0255" }}>
                   📄 Telecharger PDF
                 </button>
-                {isAdminView && (() => {
-                  const reliab = computeReliability(currentSession, currentAssessment);
-                  const canExport = reliab && reliab.globalVerdict.color === "#52B788";
-                  return canExport ? (
-                    <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
-                      📋 PDF Dirigeant (anonyme)
-                    </button>
-                  ) : (
-                    <span style={{ padding: "12px 24px", fontSize: 12, fontFamily: "'DM Mono', monospace", color: "#666", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
-                      📋 PDF Dirigeant indisponible — fiabilité insuffisante
-                    </span>
-                  );
-                })()}
+                {isAdminView && (
+                  <button onClick={handleDownloadExecutivePDF} style={{ ...btnOutline, color: "#3A5BA0", borderColor: "#3A5BA055" }}>
+                    📋 PDF Dirigeant (anonyme)
+                  </button>
+                )}
                 <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
               </div>
             </div>

@@ -369,10 +369,26 @@ function computeReliability(session, assessment) {
     ? { label: "Rythme rapide", color: "#FECC02", icon: "⚠", description: "Réponses rapides mais plausibles" }
     : { label: "Rythme normal", color: "#52B788", icon: "✓", description: "Temps de réflexion suffisant" };
 
+  // --- Global verdict: cross all indicators ---
+  // Count red flags
+  let redFlags = 0;
+  let yellowFlags = 0;
+  if (avgTimePerQ < 8) redFlags++; else if (avgTimePerQ < 12) yellowFlags++;
+  if (coherenceIndex !== null && coherenceIndex < 50) redFlags++; else if (coherenceIndex !== null && coherenceIndex < 70) yellowFlags++;
+  if (desirabilityScore !== null && desirabilityScore > 75) redFlags++; else if (desirabilityScore !== null && desirabilityScore > 55) yellowFlags++;
+  // Note: significance is computed outside, so we pass a placeholder; it will be enriched in the render
+
+  const globalVerdict = redFlags >= 2
+    ? { label: "Résultats non exploitables", color: "#e74c3c", icon: "🚨", description: "Plusieurs indicateurs signalent des réponses aléatoires ou non sincères. Ce test devrait être refait dans de meilleures conditions." }
+    : (redFlags + yellowFlags) >= 2
+    ? { label: "Résultats à interpréter avec prudence", color: "#FECC02", icon: "⚠", description: "Certains indicateurs présentent des anomalies. Les résultats peuvent manquer de fiabilité." }
+    : { label: "Résultats exploitables", color: "#52B788", icon: "✓", description: "Les indicateurs de fiabilité sont dans les normes attendues." };
+
   return {
     coherenceIndex, coherencePairs: pairs, coherenceLevel,
     desirabilityScore, desirabilityLevel,
     avgTimePerQ, timeLevel,
+    globalVerdict, redFlags, yellowFlags,
   };
 }
 
@@ -729,30 +745,6 @@ export default function App() {
       </span>`
     ).join("");
 
-    // Reliability badges
-    let reliabilityHTML = "";
-    if (reliability) {
-      const cohColor = reliability.coherenceLevel.color;
-      const desColor = reliability.desirabilityLevel.color;
-      const sigColor = absZ >= 3 ? "#52B788" : absZ >= 2 ? "#6A97DF" : absZ >= 1 ? "#FECC02" : "#e74c3c";
-      const timeColor = reliability.timeLevel.color;
-      reliabilityHTML = `
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${timeColor}18;color:${timeColor};font-family:monospace">
-            Temps moyen ${reliability.avgTimePerQ}s/question — ${reliability.timeLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${cohColor}18;color:${cohColor};font-family:monospace">
-            Coherence ${reliability.coherenceIndex}% — ${reliability.coherenceLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${desColor}18;color:${desColor};font-family:monospace">
-            Desirabilite ${reliability.desirabilityScore}% — ${reliability.desirabilityLevel.label}
-          </span>
-          <span style="font-size:8px;padding:2px 6px;border-radius:2px;background:${sigColor}18;color:${sigColor};font-family:monospace">
-            Significativite z=${sig.zScore.toFixed(1)} — ${sigLabel}
-          </span>
-        </div>`;
-    }
-
     const dateStr = currentSession.createdAt ? new Date(currentSession.createdAt).toLocaleDateString("fr-FR") : new Date().toLocaleDateString("fr-FR");
 
     // Build narrative synthesis paragraph for directors
@@ -819,12 +811,6 @@ export default function App() {
               ${bottom3HTML}
             </div>
           </div>
-        </div>
-
-        <!-- Reliability -->
-        <div style="padding:6px 10px;background:#fafafa;border:1px solid #eee;border-radius:2px;margin-bottom:10px">
-          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px">Indicateurs de fiabilite</div>
-          ${reliabilityHTML}
         </div>
 
         <!-- Footer -->
@@ -1332,9 +1318,27 @@ export default function App() {
 
             {/* --- Reliability indicators (admin-only) --- */}
             {isAdminView && reliability && (
-              <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: "4px solid #888" }}>
+              <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: `4px solid ${reliability.globalVerdict.color}` }}>
                 <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 8 }}>Indicateurs de fiabilité</h3>
-                <p style={{ fontSize: 11, color: "#555", marginBottom: 24, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur</p>
+                <p style={{ fontSize: 11, color: "#555", marginBottom: 16, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur</p>
+
+                {/* Global verdict banner */}
+                <div style={{
+                  padding: "16px 20px", marginBottom: 24, borderRadius: 2,
+                  background: `${reliability.globalVerdict.color}15`,
+                  border: `1px solid ${reliability.globalVerdict.color}44`,
+                  display: "flex", alignItems: "flex-start", gap: 12,
+                }}>
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>{reliability.globalVerdict.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: reliability.globalVerdict.color, marginBottom: 4, fontFamily: "'DM Mono', monospace" }}>
+                      {reliability.globalVerdict.label}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#aaa", lineHeight: 1.5 }}>
+                      {reliability.globalVerdict.description}
+                    </div>
+                  </div>
+                </div>
 
                 <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 24 }}>
                   {/* Coherence index */}

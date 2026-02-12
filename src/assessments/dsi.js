@@ -37,7 +37,6 @@ const dsi = {
   formats: {
     court: { label: "Court", questionsPerDim: 3, total: 42, mirrorCount: 4, desirabilityCount: 2, duration: "~17 min" },
     standard: { label: "Standard", questionsPerDim: 4, total: 58, mirrorCount: 6, desirabilityCount: 4, duration: "~24 min" },
-    complet: { label: "Complet", questionsPerDim: 5, total: 70, mirrorCount: 6, desirabilityCount: 4, duration: "~29 min" },
   },
 
   // 8 profiles ordered by priority (first match wins)

@@ -488,7 +488,7 @@ export default function App() {
   const [elapsedBefore, setElapsedBefore] = useState(0);
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
-  const [newFormat, setNewFormat] = useState("standard");
+  const [newFormat, setNewFormat] = useState("court");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [candidateEmail, setCandidateEmail] = useState("");

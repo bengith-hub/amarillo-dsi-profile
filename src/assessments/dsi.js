@@ -47,7 +47,7 @@ const dsi = {
     {
       name: "🚀 DSI Visionnaire",
       weights: [0.45, 0.10, 0.45],
-      minScore: 3.0,
+      minScore: 4.2,
       description: "Profil de leader transformationnel combinant une forte capacité d'influence stratégique et un sens aigu de l'innovation. Ce DSI sait porter une vision ambitieuse auprès du COMEX tout en restant connecté aux tendances technologiques. Il excelle dans la conduite de transformations digitales d'envergure et sait fédérer les équipes autour d'un projet de changement.",
       strengths: "Capacité à articuler une vision technologique alignée sur la stratégie business, influence naturelle auprès de la Direction Générale, aptitude à identifier et exploiter les innovations disruptives.",
       development: "Veiller à ne pas négliger l'excellence opérationnelle et le delivery au quotidien. La vision doit s'accompagner de rigueur d'exécution pour maintenir la crédibilité.",
@@ -56,7 +56,7 @@ const dsi = {
     {
       name: "⚡ DSI Stratège-Opérationnel",
       weights: [0.45, 0.45, 0.10],
-      minScore: 3.0,
+      minScore: 4.2,
       description: "Profil rare et très recherché alliant un leadership influent à une excellence d'exécution remarquable. Ce DSI sait à la fois porter des projets stratégiques au COMEX et garantir un delivery irréprochable. Il maîtrise la gestion de la complexité et sait piloter des programmes d'envergure avec rigueur tout en maintenant une influence déterminante sur la stratégie globale.",
       strengths: "Crédibilité forte auprès du COMEX grâce à des résultats concrets, capacité à gérer simultanément vision stratégique et contraintes opérationnelles, pilotage budgétaire maîtrisé.",
       development: "Intégrer davantage d'innovation et de veille technologique pour anticiper les ruptures. Développer une culture d'expérimentation au sein des équipes pour ne pas rester en mode « delivery only ».",
@@ -65,7 +65,7 @@ const dsi = {
     {
       name: "🔬 DSI Innovateur-Pragmatique",
       weights: [0.10, 0.45, 0.45],
-      minScore: 3.0,
+      minScore: 4.2,
       description: "Profil d'excellence technique combinant innovation maîtrisée et rigueur opérationnelle. Ce DSI est à l'aise dans les environnements technologiques complexes et sait transformer les idées innovantes en solutions concrètes et fiables. Il est reconnu pour sa capacité à maintenir un haut niveau de qualité technique tout en explorant de nouvelles approches.",
       strengths: "Maîtrise technique approfondie, capacité à évaluer et intégrer les nouvelles technologies de manière pragmatique, gestion des risques et cybersécurité solides.",
       development: "Renforcer le leadership d'influence et la communication au COMEX. Le savoir-faire technique doit se doubler d'une capacité à raconter une histoire stratégique convaincante.",
@@ -74,7 +74,7 @@ const dsi = {
     {
       name: "🎯 DSI Leader d'Influence",
       weights: [0.65, 0.15, 0.20],
-      minScore: 3.0,
+      minScore: 3.8,
       description: "Profil orienté leadership et influence stratégique. Ce DSI excelle dans la relation avec le COMEX et la conduite du changement. Il sait positionner la DSI comme un partenaire stratégique et obtenir les arbitrages nécessaires. Sa force réside dans sa capacité à mobiliser les parties prenantes et à piloter des transformations organisationnelles.",
       strengths: "Excellente communication avec la Direction Générale, capacité à faire évoluer la perception de l'IT dans l'organisation, conduite du changement et gestion des parties prenantes.",
       development: "Renforcer soit l'axe opérationnel (rigueur d'exécution, pilotage budgétaire) soit l'axe innovation (veille technologique, agilité) pour compléter le profil et gagner en crédibilité technique.",
@@ -83,7 +83,7 @@ const dsi = {
     {
       name: "🏗️ DSI Bâtisseur",
       weights: [0.15, 0.65, 0.20],
-      minScore: 3.0,
+      minScore: 3.8,
       description: "Profil solide, structuré et orienté résultats. Ce DSI est reconnu pour sa fiabilité et sa capacité à délivrer dans les délais et les budgets. Il maîtrise la complexité opérationnelle et apporte une rigueur appréciée dans le pilotage des projets et la gestion des risques. C'est un gestionnaire efficace qui sécurise l'existant tout en conduisant des évolutions maîtrisées.",
       strengths: "Pilotage budgétaire rigoureux, gestion des risques et cybersécurité, maîtrise de la complexité des SI, orientation résultats et sens du delivery.",
       development: "Développer le leadership stratégique (influence COMEX, vision IT) et la capacité d'innovation pour passer d'un rôle de gestionnaire à un rôle de leader transformationnel.",
@@ -92,7 +92,7 @@ const dsi = {
     {
       name: "💡 DSI Explorateur",
       weights: [0.20, 0.15, 0.65],
-      minScore: 3.0,
+      minScore: 3.8,
       description: "Profil tourné vers l'innovation et l'agilité. Ce DSI est un early adopter qui sait identifier les tendances technologiques et les opportunités d'innovation. Il est à l'aise avec l'incertitude et favorise une culture d'expérimentation au sein de ses équipes. Sa posture orientée client et sa résilience lui permettent de s'adapter rapidement aux changements.",
       strengths: "Veille technologique active, culture d'innovation et d'expérimentation, agilité organisationnelle, orientation client et capacité d'adaptation.",
       development: "Renforcer l'influence au COMEX pour faire valoir la vision innovation, et améliorer la rigueur opérationnelle (pilotage budgétaire, gestion des risques) pour sécuriser les initiatives.",
@@ -101,7 +101,7 @@ const dsi = {
     {
       name: "📈 DSI en Développement",
       weights: [0.33, 0.34, 0.33],
-      minScore: 2.2,
+      minScore: 3.0,
       description: "Profil présentant un socle de compétences solide et équilibré, avec un potentiel d'évolution significatif. Ce DSI dispose des fondamentaux nécessaires pour exercer la fonction mais n'a pas encore développé de dominante forte. C'est un profil prometteur qui gagnerait à se spécialiser et à renforcer une ou deux dimensions clés pour affirmer sa posture de leader.",
       strengths: "Polyvalence et équilibre entre les différents piliers, capacité d'apprentissage, base solide pour évoluer dans plusieurs directions.",
       development: "Identifier 2-3 dimensions prioritaires à développer en fonction du contexte visé. Un accompagnement type coaching de dirigeant ou mentorat par un DSI expérimenté serait particulièrement bénéfique.",

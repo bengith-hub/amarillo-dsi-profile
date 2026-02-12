@@ -190,6 +190,7 @@ function computeSignificance(globalScore, questionsPerDim) {
 function RankingCard({ question, dimColor, onComplete }) {
   const [ranked, setRanked] = useState([]);
   const [remaining, setRemaining] = useState(() => [...question.options].sort(() => Math.random() - 0.5));
+  const [confirmed, setConfirmed] = useState(false);
   const rankLabels = ["1er — Me ressemble le plus", "2e", "3e", "4e — Me ressemble le moins"];
   const rankColors = ["#FECC02", "#b8923a", "#7a6a4a", "#4a4a4a"];
 
@@ -198,16 +199,20 @@ function RankingCard({ question, dimColor, onComplete }) {
     const newRemaining = remaining.filter((o) => o.id !== opt.id);
     setRanked(newRanked);
     setRemaining(newRemaining);
-    if (newRanked.length === 4) setTimeout(() => onComplete(newRanked), 500);
+  };
+
+  const handleConfirm = () => {
+    setConfirmed(true);
+    setTimeout(() => onComplete(ranked), 300);
   };
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 8 }}>
         <p style={{ fontSize: 13, color: "#888", margin: 0, fontFamily: "'DM Mono', monospace", letterSpacing: 1 }}>
-          Classez de la plus proche à la plus éloignée de vous
+          Classez selon votre comportement réel en situation professionnelle
         </p>
-        {ranked.length > 0 && (
+        {ranked.length > 0 && !confirmed && (
           <button onClick={() => { setRemaining([...remaining, ranked[ranked.length - 1]]); setRanked(ranked.slice(0, -1)); }}
             style={{ fontSize: 12, color: "#888", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
             ← Annuler
@@ -223,6 +228,18 @@ function RankingCard({ question, dimColor, onComplete }) {
           </div>
         </div>
       ))}
+      {ranked.length === 4 && !confirmed && (
+        <div style={{ display: "flex", gap: 12, marginTop: 16, justifyContent: "center" }}>
+          <button onClick={() => { setRanked([]); setRemaining([...question.options].sort(() => Math.random() - 0.5)); }}
+            style={{ fontSize: 12, color: "#888", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "10px 20px", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
+            Recommencer
+          </button>
+          <button onClick={handleConfirm}
+            style={{ padding: "10px 28px", fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 500, letterSpacing: 2, textTransform: "uppercase", background: "linear-gradient(135deg, #FECC02, #E5B800)", color: "#0a0b0e", border: "none", borderRadius: 2, cursor: "pointer" }}>
+            Valider →
+          </button>
+        </div>
+      )}
       {ranked.length > 0 && ranked.length < 4 && (
         <div style={{ padding: "8px 0", margin: "12px 0", borderTop: "1px dashed rgba(255,255,255,0.08)", fontSize: 12, color: "#555", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>
           Sélectionnez votre {ranked.length + 1}{ranked.length === 0 ? "er" : "e"} choix
@@ -516,7 +533,16 @@ export default function App() {
     const ws = rankedOptions.reduce((s, o, i) => s + o.score * RANK_WEIGHTS[i], 0) / RANK_WEIGHTS.reduce((a, b) => a + b, 0);
     const newAnswers = { ...currentSession.answers };
     if (!newAnswers[q.dim]) newAnswers[q.dim] = [];
-    newAnswers[q.dim] = [...newAnswers[q.dim], ws];
+
+    // Find the answer index for this question within its dimension
+    const dimQsBefore = questions.slice(0, currentQ).filter(qq => qq.dim === q.dim).length;
+    // Replace if going back, or append if new
+    if (dimQsBefore < newAnswers[q.dim].length) {
+      newAnswers[q.dim][dimQsBefore] = ws;
+    } else {
+      newAnswers[q.dim] = [...newAnswers[q.dim], ws];
+    }
+
     const elapsed = elapsedBefore + (Date.now() - startTime);
     const nextQ = currentQ + 1;
     const isLast = nextQ >= questions.length;
@@ -529,6 +555,12 @@ export default function App() {
       if (isLast) { setIsAdminView(false); setView("results"); }
       else { setCurrentQ(nextQ); }
     }, 300);
+  };
+
+  const handleGoBack = () => {
+    if (currentQ > 0) {
+      setCurrentQ(currentQ - 1);
+    }
   };
 
   const handleSaveAndQuit = async () => {
@@ -1205,8 +1237,14 @@ export default function App() {
           <div style={{ maxWidth: 750, margin: "0 auto", padding: "40px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#FECC02", letterSpacing: 2 }}>AMARILLO {currentAssessment.label.toUpperCase()}</span>
-              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, color: "#666" }}>{currentQ + 1} / {questions.length}</span>
+                {currentQ > 0 && (
+                  <button onClick={handleGoBack}
+                    style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>
+                    ← Précédente
+                  </button>
+                )}
                 <button onClick={handleSaveAndQuit} disabled={saving}
                   style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>
                   {saving ? "Sauvegarde..." : "Sauvegarder et quitter"}
@@ -1226,7 +1264,10 @@ export default function App() {
                 <span style={{ fontSize: 12, color: "#666" }}>›</span>
                 <span style={{ fontSize: 13, color: dim.color }}>{dim.icon} {dim.name}</span>
               </div>
-              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 32, color: "#f0f0f0" }}>{q.text}</h2>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 12, color: "#f0f0f0" }}>{q.text}</h2>
+              <p style={{ fontSize: 11, color: "#666", marginBottom: 24, fontFamily: "'DM Mono', monospace", fontStyle: "italic" }}>
+                Pensez à ce que vous faites réellement, pas à ce que vous aimeriez faire.
+              </p>
               <RankingCard key={`${currentQ}-${q.dim}`} question={q} dimColor={dim.color} onComplete={handleRankComplete} />
             </div>
             <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`}</style>

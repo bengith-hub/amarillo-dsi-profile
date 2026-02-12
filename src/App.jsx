@@ -198,29 +198,34 @@ function RankingCard({ question, dimColor, onComplete }) {
     const newRemaining = remaining.filter((o) => o.id !== opt.id);
     setRanked(newRanked);
     setRemaining(newRemaining);
-    if (newRanked.length === 4) setTimeout(() => onComplete(newRanked), 500);
+    if (newRanked.length === 4) setTimeout(() => onComplete(newRanked), 800);
+  };
+
+  // Click on a ranked item: remove it and everything after it (put back to remaining)
+  const unrankFrom = (index) => {
+    const removed = ranked.slice(index);
+    setRanked(ranked.slice(0, index));
+    setRemaining([...remaining, ...removed]);
   };
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 8 }}>
         <p style={{ fontSize: 13, color: "#888", margin: 0, fontFamily: "'DM Mono', monospace", letterSpacing: 1 }}>
-          Classez de la plus proche à la plus éloignée de vous
+          Classez selon votre comportement réel en situation professionnelle
         </p>
-        {ranked.length > 0 && (
-          <button onClick={() => { setRemaining([...remaining, ranked[ranked.length - 1]]); setRanked(ranked.slice(0, -1)); }}
-            style={{ fontSize: 12, color: "#888", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
-            ← Annuler
-          </button>
-        )}
       </div>
       {ranked.map((opt, i) => (
-        <div key={opt.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 18px", marginBottom: 8, background: `${rankColors[i]}11`, border: `1px solid ${rankColors[i]}44`, borderRadius: 2, animation: "slideIn 0.3s ease" }}>
+        <div key={opt.id} onClick={() => unrankFrom(i)}
+          style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 18px", marginBottom: 8, background: `${rankColors[i]}11`, border: `1px solid ${rankColors[i]}44`, borderRadius: 2, animation: "slideIn 0.3s ease", cursor: "pointer", transition: "all 0.15s ease" }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#e74c3c66"; e.currentTarget.style.background = "rgba(231,76,60,0.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${rankColors[i]}44`; e.currentTarget.style.background = `${rankColors[i]}11`; }}>
           <div style={{ minWidth: 28, height: 28, borderRadius: "50%", background: rankColors[i], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#0a0b0e", fontFamily: "'DM Mono', monospace" }}>{i + 1}</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.5 }}>{opt.text}</div>
             <div style={{ fontSize: 11, color: rankColors[i], marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{rankLabels[i]}</div>
           </div>
+          <span style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono', monospace", alignSelf: "center", opacity: 0.6 }}>✕</span>
         </div>
       ))}
       {ranked.length > 0 && ranked.length < 4 && (
@@ -516,7 +521,16 @@ export default function App() {
     const ws = rankedOptions.reduce((s, o, i) => s + o.score * RANK_WEIGHTS[i], 0) / RANK_WEIGHTS.reduce((a, b) => a + b, 0);
     const newAnswers = { ...currentSession.answers };
     if (!newAnswers[q.dim]) newAnswers[q.dim] = [];
-    newAnswers[q.dim] = [...newAnswers[q.dim], ws];
+
+    // Find the answer index for this question within its dimension
+    const dimQsBefore = questions.slice(0, currentQ).filter(qq => qq.dim === q.dim).length;
+    // Replace if going back, or append if new
+    if (dimQsBefore < newAnswers[q.dim].length) {
+      newAnswers[q.dim][dimQsBefore] = ws;
+    } else {
+      newAnswers[q.dim] = [...newAnswers[q.dim], ws];
+    }
+
     const elapsed = elapsedBefore + (Date.now() - startTime);
     const nextQ = currentQ + 1;
     const isLast = nextQ >= questions.length;
@@ -529,6 +543,12 @@ export default function App() {
       if (isLast) { setIsAdminView(false); setView("results"); }
       else { setCurrentQ(nextQ); }
     }, 300);
+  };
+
+  const handleGoBack = () => {
+    if (currentQ > 0) {
+      setCurrentQ(currentQ - 1);
+    }
   };
 
   const handleSaveAndQuit = async () => {
@@ -1205,8 +1225,14 @@ export default function App() {
           <div style={{ maxWidth: 750, margin: "0 auto", padding: "40px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
               <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#FECC02", letterSpacing: 2 }}>AMARILLO {currentAssessment.label.toUpperCase()}</span>
-              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, color: "#666" }}>{currentQ + 1} / {questions.length}</span>
+                {currentQ > 0 && (
+                  <button onClick={handleGoBack}
+                    style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>
+                    ← Précédente
+                  </button>
+                )}
                 <button onClick={handleSaveAndQuit} disabled={saving}
                   style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>
                   {saving ? "Sauvegarde..." : "Sauvegarder et quitter"}
@@ -1226,7 +1252,10 @@ export default function App() {
                 <span style={{ fontSize: 12, color: "#666" }}>›</span>
                 <span style={{ fontSize: 13, color: dim.color }}>{dim.icon} {dim.name}</span>
               </div>
-              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 32, color: "#f0f0f0" }}>{q.text}</h2>
+              <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, lineHeight: 1.4, marginBottom: 12, color: "#f0f0f0" }}>{q.text}</h2>
+              <p style={{ fontSize: 11, color: "#666", marginBottom: 24, fontFamily: "'DM Mono', monospace", fontStyle: "italic" }}>
+                Pensez à ce que vous faites réellement, pas à ce que vous aimeriez faire.
+              </p>
               <RankingCard key={`${currentQ}-${q.dim}`} question={q} dimColor={dim.color} onComplete={handleRankComplete} />
             </div>
             <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`}</style>

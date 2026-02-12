@@ -190,7 +190,6 @@ function computeSignificance(globalScore, questionsPerDim) {
 function RankingCard({ question, dimColor, onComplete }) {
   const [ranked, setRanked] = useState([]);
   const [remaining, setRemaining] = useState(() => [...question.options].sort(() => Math.random() - 0.5));
-  const [confirmed, setConfirmed] = useState(false);
   const rankLabels = ["1er — Me ressemble le plus", "2e", "3e", "4e — Me ressemble le moins"];
   const rankColors = ["#FECC02", "#b8923a", "#7a6a4a", "#4a4a4a"];
 
@@ -199,11 +198,14 @@ function RankingCard({ question, dimColor, onComplete }) {
     const newRemaining = remaining.filter((o) => o.id !== opt.id);
     setRanked(newRanked);
     setRemaining(newRemaining);
+    if (newRanked.length === 4) setTimeout(() => onComplete(newRanked), 800);
   };
 
-  const handleConfirm = () => {
-    setConfirmed(true);
-    setTimeout(() => onComplete(ranked), 300);
+  // Click on a ranked item: remove it and everything after it (put back to remaining)
+  const unrankFrom = (index) => {
+    const removed = ranked.slice(index);
+    setRanked(ranked.slice(0, index));
+    setRemaining([...remaining, ...removed]);
   };
 
   return (
@@ -212,34 +214,20 @@ function RankingCard({ question, dimColor, onComplete }) {
         <p style={{ fontSize: 13, color: "#888", margin: 0, fontFamily: "'DM Mono', monospace", letterSpacing: 1 }}>
           Classez selon votre comportement réel en situation professionnelle
         </p>
-        {ranked.length > 0 && !confirmed && (
-          <button onClick={() => { setRemaining([...remaining, ranked[ranked.length - 1]]); setRanked(ranked.slice(0, -1)); }}
-            style={{ fontSize: 12, color: "#888", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "6px 14px", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
-            ← Annuler
-          </button>
-        )}
       </div>
       {ranked.map((opt, i) => (
-        <div key={opt.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 18px", marginBottom: 8, background: `${rankColors[i]}11`, border: `1px solid ${rankColors[i]}44`, borderRadius: 2, animation: "slideIn 0.3s ease" }}>
+        <div key={opt.id} onClick={() => unrankFrom(i)}
+          style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "14px 18px", marginBottom: 8, background: `${rankColors[i]}11`, border: `1px solid ${rankColors[i]}44`, borderRadius: 2, animation: "slideIn 0.3s ease", cursor: "pointer", transition: "all 0.15s ease" }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#e74c3c66"; e.currentTarget.style.background = "rgba(231,76,60,0.06)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${rankColors[i]}44`; e.currentTarget.style.background = `${rankColors[i]}11`; }}>
           <div style={{ minWidth: 28, height: 28, borderRadius: "50%", background: rankColors[i], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#0a0b0e", fontFamily: "'DM Mono', monospace" }}>{i + 1}</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.5 }}>{opt.text}</div>
             <div style={{ fontSize: 11, color: rankColors[i], marginTop: 4, fontFamily: "'DM Mono', monospace" }}>{rankLabels[i]}</div>
           </div>
+          <span style={{ fontSize: 11, color: "#555", fontFamily: "'DM Mono', monospace", alignSelf: "center", opacity: 0.6 }}>✕</span>
         </div>
       ))}
-      {ranked.length === 4 && !confirmed && (
-        <div style={{ display: "flex", gap: 12, marginTop: 16, justifyContent: "center" }}>
-          <button onClick={() => { setRanked([]); setRemaining([...question.options].sort(() => Math.random() - 0.5)); }}
-            style={{ fontSize: 12, color: "#888", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: "10px 20px", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
-            Recommencer
-          </button>
-          <button onClick={handleConfirm}
-            style={{ padding: "10px 28px", fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 500, letterSpacing: 2, textTransform: "uppercase", background: "linear-gradient(135deg, #FECC02, #E5B800)", color: "#0a0b0e", border: "none", borderRadius: 2, cursor: "pointer" }}>
-            Valider →
-          </button>
-        </div>
-      )}
       {ranked.length > 0 && ranked.length < 4 && (
         <div style={{ padding: "8px 0", margin: "12px 0", borderTop: "1px dashed rgba(255,255,255,0.08)", fontSize: 12, color: "#555", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>
           Sélectionnez votre {ranked.length + 1}{ranked.length === 0 ? "er" : "e"} choix

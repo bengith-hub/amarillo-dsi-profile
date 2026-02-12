@@ -1037,8 +1037,8 @@ export default function App() {
           profileType: analysis.profile,
           globalScore: Math.round(analysis.avgNorm),
           resultsCode: currentSession.code,
-          topStrengths: analysis.strengths || [],
-          topDevelopment: analysis.development || [],
+          topStrengths: typeof analysis.strengths === "string" ? analysis.strengths.split(/,\s*(?=[A-Z])/).map(s => s.trim()).filter(Boolean) : (analysis.strengths || []),
+          topDevelopment: typeof analysis.development === "string" ? analysis.development.split(/\.\s+/).map(s => s.trim().replace(/\.+$/, "")).filter(Boolean) : (analysis.development || []),
           emailConfig,
         }),
       });

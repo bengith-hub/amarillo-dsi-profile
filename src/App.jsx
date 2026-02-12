@@ -159,6 +159,37 @@ async function deleteSession(code) {
   }
 }
 
+const DEFAULT_EMAIL_CONFIG = {
+  senderName: "Amarillo Search — Profiling",
+  senderEmail: "profiling@amarillosearch.com",
+  contactName: "Amarillo Search",
+  contactDesc: "Cabinet de recrutement spécialisé IT & Digital",
+  contactEmail: "profiling@amarillosearch.com",
+  contactWebsite: "www.amarillosearch.com",
+  greeting: "Merci d'avoir complété votre évaluation DSI Profile™. Voici un récapitulatif de vos résultats. Vous trouverez ci-dessous votre profil identifié ainsi que votre score global.",
+};
+
+async function loadEmailConfig() {
+  try {
+    const record = await readBin();
+    return { ...DEFAULT_EMAIL_CONFIG, ...(record.emailConfig || {}) };
+  } catch (e) {
+    return { ...DEFAULT_EMAIL_CONFIG };
+  }
+}
+
+async function saveEmailConfig(config) {
+  try {
+    const record = await readBin();
+    record.emailConfig = config;
+    await updateBin(record);
+    return true;
+  } catch (e) {
+    console.error("Save email config error:", e);
+    return false;
+  }
+}
+
 // --- COMPONENTS ---
 const RANK_WEIGHTS = [1.0, 0.50, 0.15, 0.0];
 
@@ -428,6 +459,10 @@ export default function App() {
   const [deleting, setDeleting] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [emailConfig, setEmailConfig] = useState({ ...DEFAULT_EMAIL_CONFIG });
+  const [emailConfigEditing, setEmailConfigEditing] = useState(false);
+  const [emailConfigSaving, setEmailConfigSaving] = useState(false);
+  const [emailConfigDraft, setEmailConfigDraft] = useState({ ...DEFAULT_EMAIL_CONFIG });
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
   });
@@ -437,7 +472,12 @@ export default function App() {
   const currentAssessment = getAssessment(currentSession?.assessmentType || DEFAULT_ASSESSMENT);
   const adminAssessment = getAssessment(adminAssessmentType);
 
-  useEffect(() => { if (view === "admin") loadSessions(); }, [view]);
+  useEffect(() => {
+    if (view === "admin") {
+      loadSessions();
+      loadEmailConfig().then(cfg => { setEmailConfig(cfg); setEmailConfigDraft(cfg); });
+    }
+  }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
 
   const loadSessions = async () => {
@@ -906,8 +946,11 @@ export default function App() {
           to: candidateEmail,
           candidateName: currentSession.candidateName,
           profileType: analysis.profile,
-          globalScore: analysis.avg.toFixed(2),
+          globalScore: Math.round(analysis.avgNorm),
           resultsCode: currentSession.code,
+          topStrengths: analysis.strengths || [],
+          topDevelopment: analysis.development || [],
+          emailConfig,
         }),
       });
       if (!res.ok) throw new Error("Erreur serveur");
@@ -1127,6 +1170,76 @@ export default function App() {
               <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 12, padding: "10px 14px", background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.2)", borderRadius: 2 }}>
                 {adminError}
               </p>
+            )}
+          </div>
+
+          {/* Email configuration */}
+          <div style={{ ...box, padding: 32, marginBottom: 40 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: emailConfigEditing ? 24 : 0 }}>
+              <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", margin: 0 }}>Configuration email candidat</h3>
+              {!emailConfigEditing ? (
+                <button onClick={() => { setEmailConfigDraft({ ...emailConfig }); setEmailConfigEditing(true); }}
+                  style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>Modifier</button>
+              ) : (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setEmailConfigEditing(false)}
+                    style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>Annuler</button>
+                  <button onClick={async () => {
+                    setEmailConfigSaving(true);
+                    const ok = await saveEmailConfig(emailConfigDraft);
+                    if (ok) { setEmailConfig(emailConfigDraft); setEmailConfigEditing(false); }
+                    setEmailConfigSaving(false);
+                  }} disabled={emailConfigSaving}
+                    style={{ padding: "6px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: "#FECC02", color: "#0a0b0e", border: "none", borderRadius: 2, cursor: emailConfigSaving ? "default" : "pointer", fontWeight: 600 }}>
+                    {emailConfigSaving ? "Sauvegarde..." : "Sauvegarder"}
+                  </button>
+                </div>
+              )}
+            </div>
+            {emailConfigEditing ? (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Nom expéditeur</label>
+                    <input type="text" value={emailConfigDraft.senderName} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, senderName: e.target.value })} style={input} placeholder="Amarillo Search — Profiling" />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Email expéditeur</label>
+                    <input type="email" value={emailConfigDraft.senderEmail} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, senderEmail: e.target.value })} style={input} placeholder="profiling@amarillosearch.com" />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Nom contact (dans l'email)</label>
+                    <input type="text" value={emailConfigDraft.contactName} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, contactName: e.target.value })} style={input} placeholder="Amarillo Search" />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Email contact</label>
+                    <input type="email" value={emailConfigDraft.contactEmail} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, contactEmail: e.target.value })} style={input} placeholder="profiling@amarillosearch.com" />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Description société</label>
+                    <input type="text" value={emailConfigDraft.contactDesc} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, contactDesc: e.target.value })} style={input} placeholder="Cabinet de recrutement spécialisé IT & Digital" />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Site web</label>
+                    <input type="text" value={emailConfigDraft.contactWebsite} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, contactWebsite: e.target.value })} style={input} placeholder="www.amarillosearch.com" />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 0 }}>
+                  <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Message d'accueil</label>
+                  <textarea value={emailConfigDraft.greeting} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, greeting: e.target.value })}
+                    style={{ ...input, minHeight: 80, resize: "vertical" }} placeholder="Merci d'avoir complété votre évaluation..." />
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 16, fontSize: 13, color: "#888", lineHeight: 1.8 }}>
+                <span style={{ color: "#aaa" }}>Expéditeur :</span> {emailConfig.senderName} &lt;{emailConfig.senderEmail}&gt;<br/>
+                <span style={{ color: "#aaa" }}>Contact :</span> {emailConfig.contactName} · {emailConfig.contactEmail}<br/>
+                <span style={{ color: "#aaa" }}>Site :</span> {emailConfig.contactWebsite}
+              </div>
             )}
           </div>
 

@@ -191,16 +191,27 @@ async function saveEmailConfig(config) {
 }
 
 // --- COMPONENTS ---
-const RANK_WEIGHTS = [1.0, 0.50, 0.15, 0.0];
+// Steeper weights: 3rd and 4th choices penalize instead of being neutral
+const RANK_WEIGHTS = [1.0, 0.25, -0.15, -0.50];
 
-// Scoring normalization constants (based on RANK_WEIGHTS with scores [1,2,3,4])
-const WEIGHT_SUM = RANK_WEIGHTS.reduce((a, b) => a + b, 0);
+// Scoring normalization constants
+const WEIGHT_SUM = RANK_WEIGHTS.reduce((a, b) => a + b, 0); // 0.60
+// Worst: score 1 at w=1.0, score 2 at w=0.25, score 3 at w=-0.15, score 4 at w=-0.50
 const SCORE_THEORETICAL_MIN = (1 * RANK_WEIGHTS[0] + 2 * RANK_WEIGHTS[1] + 3 * RANK_WEIGHTS[2] + 4 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
+// Best: score 4 at w=1.0, score 3 at w=0.25, score 2 at w=-0.15, score 1 at w=-0.50
 const SCORE_THEORETICAL_MAX = (4 * RANK_WEIGHTS[0] + 3 * RANK_WEIGHTS[1] + 2 * RANK_WEIGHTS[2] + 1 * RANK_WEIGHTS[3]) / WEIGHT_SUM;
-const SCORE_RANDOM_EXPECTED = 2.5;
+const SCORE_RANDOM_EXPECTED = (SCORE_THEORETICAL_MIN + SCORE_THEORETICAL_MAX) / 2;
 
+// Sigmoid normalization: amplifies differences, separates good from average
 function normalizeScore(raw) {
-  return Math.round(Math.max(0, Math.min(100, ((raw - SCORE_THEORETICAL_MIN) / (SCORE_THEORETICAL_MAX - SCORE_THEORETICAL_MIN)) * 100)));
+  const linear01 = Math.max(0, Math.min(1, (raw - SCORE_THEORETICAL_MIN) / (SCORE_THEORETICAL_MAX - SCORE_THEORETICAL_MIN)));
+  // S-curve: k controls steepness (higher = more separation)
+  const k = 3.0;
+  const sigmoid = 1 / (1 + Math.exp(-k * (linear01 - 0.5) * 4));
+  const sigMin = 1 / (1 + Math.exp(-k * (-0.5) * 4));
+  const sigMax = 1 / (1 + Math.exp(-k * (0.5) * 4));
+  const normalized = (sigmoid - sigMin) / (sigMax - sigMin);
+  return Math.round(Math.max(0, Math.min(100, normalized * 100)));
 }
 
 // Significance vs random: compute z-score using permutation variance
@@ -321,9 +332,9 @@ function getAnalysis(scores, assessment) {
     const w = p.weights || [0.33, 0.34, 0.33];
     const weightedScore = ps.reduce((sum, s, i) => sum + s * w[i], 0);
     const eligible = weightedScore >= (p.minScore || 0);
-    // Normalize to percentage (max possible = 4.0)
-    const pct = Math.min(Math.round((weightedScore / 4.0) * 100), 100);
-    return { ...p, weightedScore, eligible, pct };
+    // Normalize to percentage using theoretical range
+    const pct = Math.min(Math.round(((weightedScore - SCORE_THEORETICAL_MIN) / (SCORE_THEORETICAL_MAX - SCORE_THEORETICAL_MIN)) * 100), 100);
+    return { ...p, weightedScore, eligible, pct: Math.max(0, pct) };
   });
 
   // Primary profile: first eligible in priority order
@@ -337,6 +348,35 @@ function getAnalysis(scores, assessment) {
   const scoresNorm = {};
   Object.entries(scores).forEach(([id, s]) => { scoresNorm[id] = normalizeScore(s); });
 
+  // Dimensional alerts: flag weaknesses and critical combos
+  const ALERT_RED = 30;   // below 30 = critical weakness
+  const ALERT_YELLOW = 45; // below 45 = area to develop
+  const alerts = [];
+  dimensions.forEach(d => {
+    const norm = scoresNorm[d.id] || 0;
+    if (norm < ALERT_RED) alerts.push({ dim: d, level: "red", score: norm, label: "Point critique" });
+    else if (norm < ALERT_YELLOW) alerts.push({ dim: d, level: "yellow", score: norm, label: "À développer" });
+  });
+
+  // Cross-dimension vulnerability detection
+  const vulnerabilities = [];
+  const visionNorm = scoresNorm.vision || 0;
+  const innovNorm = scoresNorm.innovation || 0;
+  const leaderNorm = scoresNorm.leadership || 0;
+  const influenceNorm = scoresNorm.influence || 0;
+  const budgetNorm = scoresNorm.budget || 0;
+  const riskNorm = scoresNorm.risk || 0;
+  const resultsNorm = scoresNorm.results || 0;
+
+  if (visionNorm < ALERT_YELLOW && innovNorm < ALERT_YELLOW)
+    vulnerabilities.push({ label: "Risque stratégique", desc: "Vision et Innovation faibles — positionnement IT opérationnel uniquement" });
+  if (leaderNorm < ALERT_YELLOW && influenceNorm < ALERT_YELLOW)
+    vulnerabilities.push({ label: "Déficit de leadership", desc: "Leadership et Influence faibles — difficulté à porter les projets au COMEX" });
+  if (budgetNorm < ALERT_YELLOW && resultsNorm < ALERT_YELLOW)
+    vulnerabilities.push({ label: "Fragilité opérationnelle", desc: "Budget et Résultats faibles — risque de sous-performance en delivery" });
+  if (riskNorm < ALERT_YELLOW && budgetNorm < ALERT_YELLOW)
+    vulnerabilities.push({ label: "Exposition aux risques", desc: "Risques et Budget faibles — gouvernance IT insuffisante" });
+
   return {
     top3, bottom3, avg, pillarScores: ps,
     profile: match.name, description: match.description,
@@ -344,6 +384,7 @@ function getAnalysis(scores, assessment) {
     matchPct: match.pct,
     topProfiles,
     avgNorm, pillarScoresNorm, scoresNorm,
+    alerts, vulnerabilities,
   };
 }
 
@@ -447,7 +488,7 @@ export default function App() {
   const [elapsedBefore, setElapsedBefore] = useState(0);
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
-  const [newFormat, setNewFormat] = useState("standard");
+  const [newFormat, setNewFormat] = useState("court");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [candidateEmail, setCandidateEmail] = useState("");
@@ -463,6 +504,9 @@ export default function App() {
   const [emailConfigEditing, setEmailConfigEditing] = useState(false);
   const [emailConfigSaving, setEmailConfigSaving] = useState(false);
   const [emailConfigDraft, setEmailConfigDraft] = useState({ ...DEFAULT_EMAIL_CONFIG });
+  const [testEmailAddr, setTestEmailAddr] = useState("");
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState("");
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
   });
@@ -495,6 +539,42 @@ export default function App() {
     setSeenCompletedCodes(updated);
     localStorage.setItem("amarillo_seen_completed", JSON.stringify(updated));
     setNotifications(prev => prev.filter(n => n.code !== code));
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddr.includes("@") || testEmailSending) return;
+    setTestEmailSending(true);
+    setTestEmailResult("");
+    try {
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmailAddr,
+          candidateName: "Jean Dupont (TEST)",
+          profileType: "🚀 DSI Visionnaire",
+          globalScore: 78,
+          resultsCode: "AMA-TEST",
+          topStrengths: [
+            "Vision stratégique et capacité d'anticipation",
+            "Leadership naturel et influence au COMEX",
+            "Conduite du changement maîtrisée",
+          ],
+          topDevelopment: [
+            "Pilotage budgétaire et rigueur financière",
+            "Gestion des risques cyber",
+          ],
+          emailConfig,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      setTestEmailResult("✓ Email de test envoyé — vérifiez votre boîte de réception");
+    } catch (e) {
+      setTestEmailResult("Erreur lors de l'envoi. Vérifiez la configuration Resend.");
+      console.error("Test email error:", e);
+    } finally {
+      setTestEmailSending(false);
+    }
   };
 
   const handleDeleteSession = async (code) => {
@@ -891,6 +971,15 @@ export default function App() {
           </div>
         </div>
 
+        <!-- Alerts -->
+        ${analysis.alerts.length > 0 || analysis.vulnerabilities.length > 0 ? `
+        <div style="padding:8px 10px;background:#fff5f5;border:1px solid #f5c6cb;border-left:3px solid #e74c3c;border-radius:2px;margin-bottom:10px">
+          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#e74c3c;font-weight:700;margin-bottom:4px">Points de vigilance</div>
+          ${analysis.alerts.map(a => `<div style="font-size:9px;color:#333;padding:2px 0">${a.level === "red" ? "🔴" : "🟡"} ${a.dim.name} — <b style="color:${a.level === "red" ? "#e74c3c" : "#8B7000"}">${a.score}/100</b> · ${a.label}</div>`).join("")}
+          ${analysis.vulnerabilities.map(v => `<div style="font-size:9px;color:#e74c3c;padding:2px 0;margin-top:2px"><b>${v.label}</b> : ${v.desc}</div>`).join("")}
+        </div>
+        ` : ""}
+
         <!-- Footer -->
         <div style="text-align:center;padding-top:6px;border-top:1px solid #eee;font-size:8px;color:#aaa">
           ${currentAssessment.label} · Rapport confidentiel · ${anonRef}
@@ -1241,6 +1330,24 @@ export default function App() {
                 <span style={{ color: "#aaa" }}>Site :</span> {emailConfig.contactWebsite}
               </div>
             )}
+
+            {/* Test email */}
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>Envoyer un email de test</label>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="email" value={testEmailAddr} onChange={(e) => { setTestEmailAddr(e.target.value); setTestEmailResult(""); }}
+                  placeholder="votre@email.com" style={{ ...input, flex: 1, minWidth: 200 }}
+                  onKeyDown={(e) => e.key === "Enter" && testEmailAddr.includes("@") && !testEmailSending && handleSendTestEmail()} />
+                <button onClick={handleSendTestEmail} disabled={!testEmailAddr.includes("@") || testEmailSending}
+                  style={{ padding: "12px 20px", fontSize: 12, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: testEmailAddr.includes("@") && !testEmailSending ? "rgba(254,204,2,0.15)" : "rgba(255,255,255,0.03)", color: testEmailAddr.includes("@") && !testEmailSending ? "#FECC02" : "#555", border: `1px solid ${testEmailAddr.includes("@") ? "#FECC0244" : "rgba(255,255,255,0.08)"}`, borderRadius: 2, cursor: testEmailAddr.includes("@") && !testEmailSending ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                  {testEmailSending ? "Envoi..." : "Envoyer le test"}
+                </button>
+              </div>
+              {testEmailResult && (
+                <p style={{ fontSize: 12, marginTop: 8, color: testEmailResult.startsWith("✓") ? "#52B788" : "#e74c3c" }}>{testEmailResult}</p>
+              )}
+              <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Envoie un email avec des données fictives pour vérifier la mise en page.</p>
+            </div>
           </div>
 
           <div style={{ ...box, padding: 32 }}>
@@ -1475,6 +1582,48 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* --- Alerts & Vulnerabilities --- */}
+            {(analysis.alerts.length > 0 || analysis.vulnerabilities.length > 0) && (
+              <div data-section="alerts" style={{ ...box, padding: "28px 32px", marginBottom: 40, borderLeft: "4px solid #e74c3c" }}>
+                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#e74c3c", marginBottom: 20 }}>Points de vigilance</h3>
+
+                {analysis.alerts.length > 0 && (
+                  <div style={{ marginBottom: analysis.vulnerabilities.length > 0 ? 20 : 0 }}>
+                    {analysis.alerts.map((a, i) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", marginBottom: 8,
+                        background: a.level === "red" ? "rgba(231,76,60,0.06)" : "rgba(254,204,2,0.04)",
+                        border: `1px solid ${a.level === "red" ? "rgba(231,76,60,0.2)" : "rgba(254,204,2,0.15)"}`,
+                        borderRadius: 2,
+                      }}>
+                        <span style={{ fontSize: 16 }}>{a.level === "red" ? "🔴" : "🟡"}</span>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: 13, color: "#ccc" }}>{a.dim.icon} {a.dim.name}</span>
+                          <span style={{ fontSize: 12, color: a.level === "red" ? "#e74c3c" : "#FECC02", fontFamily: "'DM Mono', monospace", marginLeft: 8, fontWeight: 700 }}>{a.score}/100</span>
+                        </div>
+                        <span style={{ fontSize: 11, color: a.level === "red" ? "#e74c3c" : "#FECC02", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>{a.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {analysis.vulnerabilities.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#e74c3c", fontFamily: "'DM Mono', monospace", marginBottom: 12, opacity: 0.7 }}>Risques combinés</div>
+                    {analysis.vulnerabilities.map((v, i) => (
+                      <div key={i} style={{
+                        padding: "12px 16px", marginBottom: 8,
+                        background: "rgba(231,76,60,0.04)", border: "1px solid rgba(231,76,60,0.15)", borderRadius: 2,
+                      }}>
+                        <div style={{ fontSize: 13, color: "#e74c3c", fontWeight: 600, marginBottom: 4 }}>{v.label}</div>
+                        <div style={{ fontSize: 12, color: "#999", lineHeight: 1.5 }}>{v.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* --- Reliability indicators (admin-only) --- */}
             {isAdminView && reliability && (

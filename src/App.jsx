@@ -504,6 +504,9 @@ export default function App() {
   const [emailConfigEditing, setEmailConfigEditing] = useState(false);
   const [emailConfigSaving, setEmailConfigSaving] = useState(false);
   const [emailConfigDraft, setEmailConfigDraft] = useState({ ...DEFAULT_EMAIL_CONFIG });
+  const [testEmailAddr, setTestEmailAddr] = useState("");
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState("");
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
   });
@@ -536,6 +539,42 @@ export default function App() {
     setSeenCompletedCodes(updated);
     localStorage.setItem("amarillo_seen_completed", JSON.stringify(updated));
     setNotifications(prev => prev.filter(n => n.code !== code));
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddr.includes("@") || testEmailSending) return;
+    setTestEmailSending(true);
+    setTestEmailResult("");
+    try {
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmailAddr,
+          candidateName: "Jean Dupont (TEST)",
+          profileType: "🚀 DSI Visionnaire",
+          globalScore: 78,
+          resultsCode: "AMA-TEST",
+          topStrengths: [
+            "Vision stratégique et capacité d'anticipation",
+            "Leadership naturel et influence au COMEX",
+            "Conduite du changement maîtrisée",
+          ],
+          topDevelopment: [
+            "Pilotage budgétaire et rigueur financière",
+            "Gestion des risques cyber",
+          ],
+          emailConfig,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      setTestEmailResult("✓ Email de test envoyé — vérifiez votre boîte de réception");
+    } catch (e) {
+      setTestEmailResult("Erreur lors de l'envoi. Vérifiez la configuration Resend.");
+      console.error("Test email error:", e);
+    } finally {
+      setTestEmailSending(false);
+    }
   };
 
   const handleDeleteSession = async (code) => {
@@ -1291,6 +1330,24 @@ export default function App() {
                 <span style={{ color: "#aaa" }}>Site :</span> {emailConfig.contactWebsite}
               </div>
             )}
+
+            {/* Test email */}
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>Envoyer un email de test</label>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="email" value={testEmailAddr} onChange={(e) => { setTestEmailAddr(e.target.value); setTestEmailResult(""); }}
+                  placeholder="votre@email.com" style={{ ...input, flex: 1, minWidth: 200 }}
+                  onKeyDown={(e) => e.key === "Enter" && testEmailAddr.includes("@") && !testEmailSending && handleSendTestEmail()} />
+                <button onClick={handleSendTestEmail} disabled={!testEmailAddr.includes("@") || testEmailSending}
+                  style={{ padding: "12px 20px", fontSize: 12, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: testEmailAddr.includes("@") && !testEmailSending ? "rgba(254,204,2,0.15)" : "rgba(255,255,255,0.03)", color: testEmailAddr.includes("@") && !testEmailSending ? "#FECC02" : "#555", border: `1px solid ${testEmailAddr.includes("@") ? "#FECC0244" : "rgba(255,255,255,0.08)"}`, borderRadius: 2, cursor: testEmailAddr.includes("@") && !testEmailSending ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                  {testEmailSending ? "Envoi..." : "Envoyer le test"}
+                </button>
+              </div>
+              {testEmailResult && (
+                <p style={{ fontSize: 12, marginTop: 8, color: testEmailResult.startsWith("✓") ? "#52B788" : "#e74c3c" }}>{testEmailResult}</p>
+              )}
+              <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Envoie un email avec des données fictives pour vérifier la mise en page.</p>
+            </div>
           </div>
 
           <div style={{ ...box, padding: 32 }}>

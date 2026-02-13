@@ -304,15 +304,29 @@ function RadarChart({ scores, dimensions, size = 440 }) {
   );
 }
 
+// Score interpretation levels
+const SCORE_LEVELS = [
+  { min: 85, label: "Expert", color: "#2D6A4F", desc: "Maîtrise avancée, pratiques d'excellence" },
+  { min: 70, label: "Confirmé", color: "#52B788", desc: "Compétence solide et éprouvée" },
+  { min: 50, label: "Solide", color: "#FECC02", desc: "Bonne base, marge de progression" },
+  { min: 30, label: "En construction", color: "#E8A838", desc: "Fondamentaux à renforcer" },
+  { min: 0, label: "Opérationnel", color: "#e74c3c", desc: "Posture réactive, potentiel à développer" },
+];
+function getScoreLevel(norm) { return SCORE_LEVELS.find(l => norm >= l.min) || SCORE_LEVELS[SCORE_LEVELS.length - 1]; }
+
 function ScoreBar({ dimension, score }) {
   const norm = normalizeScore(score);
+  const level = getScoreLevel(norm);
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <span data-dim-label style={{ color: "#d0d0d0", fontSize: 13 }}>{dimension.icon} {dimension.name}</span>
-        <span data-score-value style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{norm}/100</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 10, color: level.color, fontFamily: "'DM Mono', monospace", padding: "2px 6px", background: `${level.color}15`, borderRadius: 2 }}>{level.label}</span>
+          <span data-score-value style={{ color: dimension.color, fontWeight: 700, fontSize: 14, fontFamily: "'DM Mono', monospace" }}>{norm}/100</span>
+        </div>
       </div>
-      <div data-bar-bg style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)" }}>
+      <div data-bar-bg style={{ height: 8, borderRadius: 4, background: "rgba(255,255,255,0.06)", position: "relative" }}>
         <div style={{ height: "100%", borderRadius: 4, width: `${norm}%`, background: `linear-gradient(90deg, ${dimension.color}, ${dimension.color}cc)`, transition: "width 1s ease" }} />
       </div>
     </div>
@@ -507,6 +521,7 @@ export default function App() {
   const [testEmailAddr, setTestEmailAddr] = useState("");
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState("");
+  const [simResult, setSimResult] = useState(null);
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
   });
@@ -1415,6 +1430,76 @@ export default function App() {
             </div>
           )}
 
+          {/* Profile simulator */}
+          <div style={{ ...box, padding: 32, marginTop: 40 }}>
+            <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 8 }}>Simulateur de profils</h3>
+            <p style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>Vérifiez que le test identifie correctement chaque archétype en simulant des réponses types.</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: simResult ? 24 : 0 }}>
+              {[
+                { label: "Visionnaire", desc: "Fort en Vision + Innovation", pattern: { vision: 3.8, leadership: 3.2, change: 3.5, influence: 3.4, budget: 2.0, risk: 2.1, complexity: 2.2, results: 2.3, innovation: 3.7, client: 3.0, resilience: 2.8, agility: 3.6 }},
+                { label: "Stratège-Op.", desc: "Fort en Leadership + Opérationnel", pattern: { vision: 3.5, leadership: 3.8, change: 3.4, influence: 3.6, budget: 3.5, risk: 3.2, complexity: 3.4, results: 3.7, innovation: 2.0, client: 2.2, resilience: 2.5, agility: 2.1 }},
+                { label: "Bâtisseur", desc: "Fort en Opérationnel", pattern: { vision: 2.1, leadership: 2.3, change: 2.0, influence: 2.2, budget: 3.7, risk: 3.5, complexity: 3.8, results: 3.6, innovation: 2.4, client: 2.5, resilience: 2.8, agility: 2.3 }},
+                { label: "Explorateur", desc: "Fort en Innovation", pattern: { vision: 2.3, leadership: 2.0, change: 2.2, influence: 2.1, budget: 2.2, risk: 2.0, complexity: 2.1, results: 2.3, innovation: 3.8, client: 3.5, resilience: 3.4, agility: 3.7 }},
+                { label: "Équilibré fort", desc: "Bon partout", pattern: { vision: 3.4, leadership: 3.3, change: 3.2, influence: 3.5, budget: 3.3, risk: 3.1, complexity: 3.4, results: 3.2, innovation: 3.3, client: 3.4, resilience: 3.1, agility: 3.2 }},
+                { label: "Aléatoire", desc: "Réponses au hasard", pattern: { vision: 2.5, leadership: 2.4, change: 2.6, influence: 2.3, budget: 2.5, risk: 2.7, complexity: 2.4, results: 2.6, innovation: 2.5, client: 2.3, resilience: 2.4, agility: 2.6 }},
+                { label: "Faible", desc: "Mauvais partout", pattern: { vision: 1.8, leadership: 1.6, change: 1.9, influence: 1.7, budget: 1.8, risk: 2.0, complexity: 1.7, results: 1.9, innovation: 1.6, client: 1.8, resilience: 2.0, agility: 1.7 }},
+              ].map(archetype => (
+                <button key={archetype.label} onClick={() => {
+                  const analysis = getAnalysis(archetype.pattern, adminAssessment);
+                  setSimResult({ archetype: archetype.label, desc: archetype.desc, analysis, scores: archetype.pattern });
+                }}
+                  style={{ padding: "10px 14px", fontSize: 11, fontFamily: "'DM Mono', monospace", background: simResult?.archetype === archetype.label ? "rgba(254,204,2,0.12)" : "rgba(255,255,255,0.03)", border: `1px solid ${simResult?.archetype === archetype.label ? "#FECC02" : "rgba(255,255,255,0.08)"}`, borderRadius: 2, color: simResult?.archetype === archetype.label ? "#FECC02" : "#888", cursor: "pointer" }}>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{archetype.label}</div>
+                  <div style={{ fontSize: 9, opacity: 0.7 }}>{archetype.desc}</div>
+                </button>
+              ))}
+            </div>
+            {simResult && (
+              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, padding: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: "#FECC02" }}>{simResult.analysis.profile}</span>
+                    <span style={{ fontSize: 12, color: "#888", marginLeft: 12 }}>Simulation « {simResult.archetype} »</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <span style={{ padding: "4px 10px", background: "#1a1a1a", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#FECC02" }}>{simResult.analysis.avgNorm}/100</span>
+                    <span style={{ padding: "4px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 2, fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#888" }}>{simResult.analysis.matchPct}%</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+                  {adminAssessment.pillars.map((p, i) => (
+                    <div key={i} style={{ flex: 1, minWidth: 140, padding: "10px 14px", background: `${p.color}08`, border: `1px solid ${p.color}22`, borderRadius: 2, textAlign: "center" }}>
+                      <div style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: p.color, marginBottom: 4 }}>{p.name}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#f0f0f0" }}>{simResult.analysis.pillarScoresNorm[i]}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {adminAssessment.dimensions.map(dim => {
+                    const norm = simResult.analysis.scoresNorm[dim.id] || 0;
+                    const level = getScoreLevel(norm);
+                    return (
+                      <div key={dim.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", background: norm < 30 ? "rgba(231,76,60,0.06)" : "transparent", borderRadius: 2, fontSize: 12 }}>
+                        <span style={{ color: "#aaa" }}>{dim.icon} {dim.name}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <span style={{ fontSize: 9, color: level.color, fontFamily: "'DM Mono', monospace" }}>{level.label}</span>
+                          <span style={{ fontFamily: "'DM Mono', monospace", fontWeight: 700, color: norm < 30 ? "#e74c3c" : norm < 45 ? "#E8A838" : "#ccc" }}>{norm}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {simResult.analysis.alerts.length > 0 && (
+                  <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(231,76,60,0.06)", border: "1px solid rgba(231,76,60,0.15)", borderRadius: 2 }}>
+                    <span style={{ fontSize: 10, color: "#e74c3c", fontFamily: "'DM Mono', monospace" }}>
+                      {simResult.analysis.alerts.length} alerte{simResult.analysis.alerts.length > 1 ? "s" : ""} · {simResult.analysis.vulnerabilities.map(v => v.label).join(", ") || "Aucune vulnérabilité croisée"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Methodology section */}
           {adminAssessment.methodology && (
             <div style={{ ...box, padding: 32, marginTop: 40 }}>
@@ -1561,6 +1646,17 @@ export default function App() {
                 {currentAssessment.dimensions.filter(d => d.pillar === pi).map(dim => <ScoreBar key={dim.id} dimension={dim} score={scores[dim.id]} />)}
               </div>
             ))}
+
+            {/* Score interpretation legend */}
+            <div data-section="legend" style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginBottom: 32, padding: "16px 0" }}>
+              {SCORE_LEVELS.slice().reverse().map(l => (
+                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", background: `${l.color}10`, border: `1px solid ${l.color}30`, borderRadius: 2 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: l.color }} />
+                  <span style={{ fontSize: 10, color: l.color, fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>{l.label}</span>
+                  <span style={{ fontSize: 10, color: "#666" }}>({l.min}+)</span>
+                </div>
+              ))}
+            </div>
 
             <div data-section="synthesis" style={{ display: "flex", gap: 16, marginBottom: 40, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 280px", padding: "28px 32px", background: "rgba(45,106,79,0.06)", border: "1px solid rgba(45,106,79,0.2)", borderRadius: 2 }}>

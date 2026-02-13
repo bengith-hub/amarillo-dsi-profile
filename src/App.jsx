@@ -1436,13 +1436,22 @@ export default function App() {
             <p style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>Vérifiez que le test identifie correctement chaque archétype en simulant des réponses types.</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: simResult ? 24 : 0 }}>
               {[
-                { label: "Visionnaire", desc: "Fort en Vision + Innovation", pattern: { vision: 3.8, leadership: 3.2, change: 3.5, influence: 3.4, budget: 2.0, risk: 2.1, complexity: 2.2, results: 2.3, innovation: 3.7, client: 3.0, resilience: 2.8, agility: 3.6 }},
-                { label: "Stratège-Op.", desc: "Fort en Leadership + Opérationnel", pattern: { vision: 3.5, leadership: 3.8, change: 3.4, influence: 3.6, budget: 3.5, risk: 3.2, complexity: 3.4, results: 3.7, innovation: 2.0, client: 2.2, resilience: 2.5, agility: 2.1 }},
-                { label: "Bâtisseur", desc: "Fort en Opérationnel", pattern: { vision: 2.1, leadership: 2.3, change: 2.0, influence: 2.2, budget: 3.7, risk: 3.5, complexity: 3.8, results: 3.6, innovation: 2.4, client: 2.5, resilience: 2.8, agility: 2.3 }},
-                { label: "Explorateur", desc: "Fort en Innovation", pattern: { vision: 2.3, leadership: 2.0, change: 2.2, influence: 2.1, budget: 2.2, risk: 2.0, complexity: 2.1, results: 2.3, innovation: 3.8, client: 3.5, resilience: 3.4, agility: 3.7 }},
-                { label: "Équilibré fort", desc: "Bon partout", pattern: { vision: 3.4, leadership: 3.3, change: 3.2, influence: 3.5, budget: 3.3, risk: 3.1, complexity: 3.4, results: 3.2, innovation: 3.3, client: 3.4, resilience: 3.1, agility: 3.2 }},
-                { label: "Aléatoire", desc: "Réponses au hasard", pattern: { vision: 2.5, leadership: 2.4, change: 2.6, influence: 2.3, budget: 2.5, risk: 2.7, complexity: 2.4, results: 2.6, innovation: 2.5, client: 2.3, resilience: 2.4, agility: 2.6 }},
-                { label: "Faible", desc: "Mauvais partout", pattern: { vision: 1.8, leadership: 1.6, change: 1.9, influence: 1.7, budget: 1.8, risk: 2.0, complexity: 1.7, results: 1.9, innovation: 1.6, client: 1.8, resilience: 2.0, agility: 1.7 }},
+                // Visionnaire : répond très stratégique/innovant, met systématiquement les réponses transformationnelles en 1er
+                // Faible en opérationnel (budget, risk, complexity, results)
+                { label: "Visionnaire", desc: "Stratégique + Innovant", pattern: { vision: 5.5, leadership: 4.5, change: 5.0, influence: 5.0, budget: 2.8, risk: 2.5, complexity: 3.0, results: 2.8, innovation: 5.5, client: 4.5, resilience: 3.5, agility: 5.0 }},
+                // Stratège-Opérationnel : fort en leadership ET opérationnel, faible en innovation
+                { label: "Stratège-Op.", desc: "Leadership + Delivery", pattern: { vision: 5.0, leadership: 5.5, change: 4.8, influence: 5.2, budget: 5.0, risk: 4.5, complexity: 5.0, results: 5.2, innovation: 2.8, client: 3.0, resilience: 3.2, agility: 2.5 }},
+                // Bâtisseur : candidat très orienté process, rigueur, KPIs — moins à l'aise sur le leadership stratégique
+                { label: "Bâtisseur", desc: "Opérationnel rigoureux", pattern: { vision: 2.8, leadership: 3.0, change: 2.5, influence: 2.8, budget: 5.2, risk: 5.0, complexity: 5.5, results: 5.0, innovation: 3.0, client: 3.2, resilience: 3.5, agility: 2.8 }},
+                // Explorateur : candidat orienté innovation, agile, tech-savvy — moins structuré sur l'opérationnel et le COMEX
+                { label: "Explorateur", desc: "Innovation + Agilité", pattern: { vision: 3.0, leadership: 2.8, change: 3.2, influence: 2.5, budget: 2.5, risk: 2.8, complexity: 2.5, results: 3.0, innovation: 5.5, client: 5.0, resilience: 4.8, agility: 5.2 }},
+                // Équilibré fort : bon DSI expérimenté, met la bonne réponse en 1er ~80% du temps sur toutes les dimensions
+                { label: "Équilibré fort", desc: "Bon partout", pattern: { vision: 5.0, leadership: 4.8, change: 4.5, influence: 5.0, budget: 4.8, risk: 4.5, complexity: 5.0, results: 4.5, innovation: 4.8, client: 5.0, resilience: 4.5, agility: 4.8 }},
+                // Aléatoire : clique sans lire, classement au hasard parmi les 24 permutations possibles → moyenne ~2.5
+                { label: "Aléatoire", desc: "Clics au hasard", pattern: { vision: 2.6, leadership: 2.3, change: 2.7, influence: 2.4, budget: 2.5, risk: 2.8, complexity: 2.3, results: 2.6, innovation: 2.4, client: 2.7, resilience: 2.5, agility: 2.3 }},
+                // Faible : candidat opérationnel qui privilégie systématiquement les réponses réactives/basiques (score 1-2 en 1er)
+                // Ex: "Maintenir l'existant", "Réduire les coûts", "Attendre que d'autres l'adoptent" → raw score ~0.5-1.5
+                { label: "Faible", desc: "Pensée opérationnelle", pattern: { vision: 1.0, leadership: 1.3, change: 0.8, influence: 1.2, budget: 1.5, risk: 1.0, complexity: 0.8, results: 1.3, innovation: 0.5, client: 1.2, resilience: 1.5, agility: 0.8 }},
               ].map(archetype => (
                 <button key={archetype.label} onClick={() => {
                   const analysis = getAnalysis(archetype.pattern, adminAssessment);

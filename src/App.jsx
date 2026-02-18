@@ -560,6 +560,10 @@ export default function App() {
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [debriefEmail, setDebriefEmail] = useState("");
+  const [debriefSending, setDebriefSending] = useState(false);
+  const [debriefSent, setDebriefSent] = useState(false);
+  const [debriefError, setDebriefError] = useState("");
   const [adminError, setAdminError] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -1125,6 +1129,63 @@ export default function App() {
       console.error("Email error:", e);
     } finally {
       setEmailSending(false);
+    }
+  };
+
+  const handleSendDebrief = async () => {
+    const targetEmail = debriefEmail || currentSession?.candidateEmail || "";
+    if (!targetEmail.includes("@") || debriefSending) return;
+    setDebriefSending(true);
+    setDebriefError("");
+    setDebriefSent(false);
+    try {
+      const scores = computeScores();
+      const analysis = getAnalysis(scores, currentAssessment);
+      const debriefData = currentAssessment.debriefContent || {};
+      const weakDims = currentAssessment.dimensions.filter(d => analysis.scoresNorm[d.id] < 50);
+      const strongDims = currentAssessment.dimensions.filter(d => analysis.scoresNorm[d.id] >= 85).sort((a, b) => analysis.scoresNorm[b.id] - analysis.scoresNorm[a.id]);
+      const detectedParadoxes = (currentAssessment.paradoxes || []).filter(p => {
+        const s0 = analysis.scoresNorm[p.dims[0]], s1 = analysis.scoresNorm[p.dims[1]];
+        return s0 !== undefined && s1 !== undefined && Math.abs(s0 - s1) >= p.gap;
+      }).map(p => {
+        const d0 = currentAssessment.dimensions.find(d => d.id === p.dims[0]);
+        const d1 = currentAssessment.dimensions.find(d => d.id === p.dims[1]);
+        return { dims: `${d0?.name} (${analysis.scoresNorm[p.dims[0]]}) vs ${d1?.name} (${analysis.scoresNorm[p.dims[1]]})`, insight: p.insight };
+      });
+      const conclusionText =
+        (strongDims.length > 0 ? `Le profil révèle des atouts solides — notamment ${strongDims.slice(0, 3).map(d => d.name).join(", ")} — qui constituent un socle de crédibilité. ` : "") +
+        (weakDims.length === 1
+          ? `L'axe de progression principal se situe sur ${weakDims[0].name} (${analysis.scoresNorm[weakDims[0].id]}/100). `
+          : `Les axes de progression se situent sur ${weakDims.map(d => `${d.name} (${analysis.scoresNorm[d.id]}/100)`).join(" et ")}. `) +
+        "Ce sont des compétences qui se développent — en être conscient est déjà la première étape.";
+
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "debrief",
+          to: targetEmail,
+          candidateName: currentSession.candidateName,
+          profileType: analysis.profile,
+          globalScore: Math.round(analysis.avgNorm),
+          strongPoints: strongDims.slice(0, 5).map(d => `${d.icon} ${d.name} — ${analysis.scoresNorm[d.id]}/100`),
+          weakDimensions: weakDims.map(dim => {
+            const content = debriefData[dim.id] || {};
+            const level = getScoreLevel(analysis.scoresNorm[dim.id]);
+            return { icon: dim.icon, name: dim.name, score: analysis.scoresNorm[dim.id], levelColor: level.color, commentary: content.commentary || "", actions: content.actions || [] };
+          }),
+          paradoxes: detectedParadoxes,
+          conclusion: conclusionText,
+          emailConfig,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      setDebriefSent(true);
+    } catch (e) {
+      setDebriefError("Erreur lors de l'envoi. Réessayez plus tard.");
+      console.error("Debrief email error:", e);
+    } finally {
+      setDebriefSending(false);
     }
   };
 
@@ -1942,93 +2003,167 @@ export default function App() {
               </div>
             )}
 
-            {/* --- Admin Q&A Detail for Debrief --- */}
-            {isAdminView && (
-              <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: "4px solid #3A5BA0" }}>
-                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#3A5BA0", marginBottom: 8 }}>Détail Questions / Réponses — Debriefing</h3>
-                <p style={{ fontSize: 11, color: "#555", marginBottom: 20, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur · Classement du candidat vs classement idéal</p>
+            {/* --- Admin Debrief Section --- */}
+            {isAdminView && (() => {
+              const weakDims = currentAssessment.dimensions.filter(d => analysis.scoresNorm[d.id] < 50);
+              const strongDims = currentAssessment.dimensions.filter(d => analysis.scoresNorm[d.id] >= 85).sort((a, b) => analysis.scoresNorm[b.id] - analysis.scoresNorm[a.id]);
+              const debriefData = currentAssessment.debriefContent || {};
+              const paradoxes = (currentAssessment.paradoxes || []).filter(p => {
+                const s0 = analysis.scoresNorm[p.dims[0]], s1 = analysis.scoresNorm[p.dims[1]];
+                return s0 !== undefined && s1 !== undefined && Math.abs(s0 - s1) >= p.gap;
+              });
+              return weakDims.length > 0 ? (
+                <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: "4px solid #3A5BA0" }}>
+                  <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#3A5BA0", marginBottom: 8 }}>Guide de debriefing</h3>
+                  <p style={{ fontSize: 11, color: "#555", marginBottom: 24, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur · {weakDims.length} dimension{weakDims.length > 1 ? "s" : ""} en dessous de 50/100</p>
 
-                {!hasRankingData(currentSession) ? (
-                  <div style={{ padding: "16px 20px", background: "rgba(254,204,2,0.04)", border: "1px solid rgba(254,204,2,0.15)", borderRadius: 2, fontSize: 13, color: "#FECC02" }}>
-                    ⚠ Session antérieure — les données de classement détaillé ne sont pas disponibles pour cette session. Seuls les scores agrégés sont visibles.
-                  </div>
-                ) : (
-                  currentAssessment.pillars.map((pillar, pi) => {
-                    const pillarDims = currentAssessment.dimensions.filter(d => d.pillar === pi);
+                  {/* Strong points summary */}
+                  {strongDims.length > 0 && (
+                    <div style={{ padding: "16px 20px", marginBottom: 24, background: "rgba(82,183,136,0.05)", border: "1px solid rgba(82,183,136,0.15)", borderRadius: 2 }}>
+                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#52B788", marginBottom: 8 }}>Points forts a valoriser en ouverture</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {strongDims.slice(0, 5).map(d => (
+                          <span key={d.id} style={{ padding: "4px 10px", background: "rgba(82,183,136,0.08)", border: "1px solid rgba(82,183,136,0.2)", borderRadius: 2, fontSize: 11, color: "#52B788", fontFamily: "'DM Mono', monospace" }}>
+                            {d.icon} {d.name} — {analysis.scoresNorm[d.id]}/100
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Paradoxes */}
+                  {paradoxes.length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      {paradoxes.map((p, i) => {
+                        const d0 = currentAssessment.dimensions.find(d => d.id === p.dims[0]);
+                        const d1 = currentAssessment.dimensions.find(d => d.id === p.dims[1]);
+                        return (
+                          <div key={i} style={{ padding: "12px 16px", marginBottom: 8, background: "rgba(254,204,2,0.04)", border: "1px solid rgba(254,204,2,0.12)", borderRadius: 2 }}>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "#FECC02", fontWeight: 600 }}>PARADOXE</span>
+                              <span style={{ fontSize: 11, color: "#888" }}>
+                                {d0?.icon} {d0?.name} ({analysis.scoresNorm[p.dims[0]]}) vs {d1?.icon} {d1?.name} ({analysis.scoresNorm[p.dims[1]]})
+                              </span>
+                            </div>
+                            <p style={{ fontSize: 12, color: "#ccc", lineHeight: 1.6, margin: 0 }}>{p.insight}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Per weak dimension: commentary + actions + optional question grid */}
+                  {weakDims.map(dim => {
+                    const normScore = analysis.scoresNorm[dim.id];
+                    const level = getScoreLevel(normScore);
+                    const content = debriefData[dim.id];
+                    const dimAnswers = currentSession.answers[dim.id] || [];
+                    const sessionQs = (currentSession.questions || []).filter(q => q.dim === dim.id && !q.mirrorOf);
+                    const hasRanking = dimAnswers.some(v => typeof v === "object" && v !== null && v.r);
                     return (
-                      <details key={pi} style={{ marginBottom: 12 }}>
-                        <summary style={{ fontSize: 13, fontWeight: 600, color: pillar.color, cursor: "pointer", fontFamily: "'DM Mono', monospace", padding: "8px 0", borderBottom: `1px solid ${pillar.color}22` }}>
-                          {pillar.name}
-                        </summary>
-                        <div style={{ paddingTop: 12 }}>
-                          {pillarDims.map(dim => {
-                            const dimAnswers = currentSession.answers[dim.id] || [];
-                            const sessionQs = (currentSession.questions || []).filter(q => q.dim === dim.id && !q.mirrorOf);
-                            const normScore = analysis.scoresNorm[dim.id];
-                            const level = getScoreLevel(normScore);
-                            return (
-                              <details key={dim.id} style={{ marginBottom: 8, marginLeft: 12 }}>
-                                <summary style={{ fontSize: 12, color: "#ccc", cursor: "pointer", fontFamily: "'DM Mono', monospace", padding: "6px 0", display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span>{dim.icon} {dim.name}</span>
-                                  <span style={{ fontSize: 11, fontWeight: 700, color: level.color, fontFamily: "'DM Mono', monospace" }}>{normScore}/100</span>
-                                  <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 2, background: `${level.color}15`, color: level.color }}>{level.label}</span>
-                                </summary>
-                                <div style={{ paddingTop: 8, paddingLeft: 8 }}>
-                                  {sessionQs.map((sq, qIdx) => {
-                                    const fullQ = reconstructQuestion(sq, currentAssessment);
-                                    const ansVal = dimAnswers[qIdx];
-                                    if (!fullQ || ansVal === undefined) return null;
-                                    const result = analyzeAnswer(ansVal, fullQ);
-                                    if (!result) return (
-                                      <div key={qIdx} style={{ padding: "8px 12px", marginBottom: 6, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, fontSize: 12, color: "#666" }}>
-                                        Q{qIdx + 1} — Données de classement non disponibles
-                                      </div>
-                                    );
-                                    return (
-                                      <div key={qIdx} style={{ padding: "12px 16px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
-                                        <div style={{ fontSize: 12, color: "#ddd", marginBottom: 10, lineHeight: 1.5 }}>
-                                          <strong style={{ color: "#f0f0f0" }}>Q{qIdx + 1}.</strong> {fullQ.text}
-                                        </div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: result.coaching ? 10 : 0 }}>
-                                          {result.comparisons.map((c, ci) => {
-                                            const match = c.delta === 0;
-                                            const close = Math.abs(c.delta) === 1;
-                                            const color = match ? "#52B788" : close ? "#FECC02" : "#e74c3c";
-                                            const bg = match ? "rgba(82,183,136,0.06)" : close ? "rgba(254,204,2,0.04)" : "rgba(231,76,60,0.06)";
-                                            return (
-                                              <div key={ci} style={{ padding: "6px 10px", background: bg, border: `1px solid ${color}22`, borderRadius: 2, fontSize: 11, color: "#bbb", lineHeight: 1.4 }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                                                  <span style={{ color, fontWeight: 600, fontFamily: "'DM Mono', monospace" }}>
-                                                    {match ? "✓" : close ? "~" : "✗"} #{c.candidatePos + 1}
-                                                  </span>
-                                                  <span style={{ fontSize: 10, color: "#666", fontFamily: "'DM Mono', monospace" }}>
-                                                    idéal #{c.idealPos + 1}
-                                                  </span>
-                                                </div>
-                                                <div style={{ fontSize: 10, color: "#999" }}>{c.text}</div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                        {result.coaching && (
-                                          <div style={{ padding: "8px 12px", background: "rgba(58,91,160,0.06)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2, fontSize: 11, color: "#8FAEE0", lineHeight: 1.5 }}>
-                                            💡 {result.coaching.tip}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </details>
-                            );
-                          })}
+                      <div key={dim.id} style={{ marginBottom: 24, padding: "20px 24px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                          <span style={{ fontSize: 18 }}>{dim.icon}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{dim.name}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: level.color, fontFamily: "'DM Mono', monospace" }}>{normScore}/100</span>
+                          <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 2, background: `${level.color}15`, color: level.color }}>{level.label}</span>
                         </div>
-                      </details>
+
+                        {/* Commentary */}
+                        {content && (
+                          <p style={{ fontSize: 13, color: "#bbb", lineHeight: 1.7, marginBottom: 16, paddingLeft: 4, borderLeft: `2px solid ${dim.color}44` }}>{content.commentary}</p>
+                        )}
+
+                        {/* 3 actions */}
+                        {content && content.actions && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#3A5BA0", marginBottom: 8 }}>Actions recommandees</div>
+                            {content.actions.map((action, ai) => (
+                              <div key={ai} style={{ display: "flex", gap: 8, padding: "8px 12px", marginBottom: 4, background: "rgba(58,91,160,0.04)", border: "1px solid rgba(58,91,160,0.1)", borderRadius: 2 }}>
+                                <span style={{ color: "#3A5BA0", fontWeight: 700, fontFamily: "'DM Mono', monospace", fontSize: 12, flexShrink: 0 }}>{ai + 1}.</span>
+                                <span style={{ fontSize: 12, color: "#aaa", lineHeight: 1.5 }}>{action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Collapsible question detail grid (only for sessions with ranking data) */}
+                        {hasRanking && (
+                          <details style={{ marginTop: 8 }}>
+                            <summary style={{ fontSize: 11, color: "#666", cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>Detail des questions et classements</summary>
+                            <div style={{ marginTop: 10 }}>
+                              {sessionQs.map((sq, qIdx) => {
+                                const fullQ = reconstructQuestion(sq, currentAssessment);
+                                const ansVal = dimAnswers[qIdx];
+                                if (!fullQ || ansVal === undefined) return null;
+                                const sortedOpts = [...fullQ.options].sort((a, b) => b.score - a.score);
+                                const maturityLabels = ["Expert", "Strategique", "Fonctionnel", "Operationnel"];
+                                const maturityColors = ["#52B788", "#6A97DF", "#FECC02", "#e74c3c"];
+                                const result = analyzeAnswer(ansVal, fullQ);
+                                const candidateFirstId = result ? result.candidateRanking[0] : null;
+                                return (
+                                  <div key={qIdx} style={{ padding: "12px 16px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                                    <div style={{ fontSize: 12, color: "#ddd", marginBottom: 8, lineHeight: 1.5 }}>
+                                      <strong style={{ color: "#f0f0f0" }}>Q{qIdx + 1}.</strong> {fullQ.text}
+                                    </div>
+                                    {sortedOpts.map((opt, oi) => {
+                                      const isCandidate1st = opt.id === candidateFirstId;
+                                      return (
+                                        <div key={opt.id} style={{
+                                          display: "flex", gap: 8, alignItems: "center", padding: "5px 10px", marginBottom: 2, borderRadius: 2,
+                                          background: isCandidate1st ? "rgba(231,76,60,0.08)" : "transparent",
+                                          border: isCandidate1st ? "1px solid rgba(231,76,60,0.2)" : "1px solid transparent",
+                                        }}>
+                                          <span style={{ fontSize: 10, fontWeight: 700, color: maturityColors[oi], fontFamily: "'DM Mono', monospace", minWidth: 80 }}>{maturityLabels[oi]}</span>
+                                          <span style={{ fontSize: 11, color: "#999", flex: 1 }}>{opt.text}</span>
+                                          {isCandidate1st && <span style={{ fontSize: 9, color: "#e74c3c", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" }}>choix #1 candidat</span>}
+                                        </div>
+                                      );
+                                    })}
+                                    {result?.coaching && (
+                                      <div style={{ marginTop: 6, padding: "6px 10px", background: "rgba(58,91,160,0.06)", border: "1px solid rgba(58,91,160,0.1)", borderRadius: 2, fontSize: 10, color: "#8FAEE0", lineHeight: 1.4 }}>
+                                        {result.coaching.tip}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        )}
+                      </div>
                     );
-                  })
-                )}
-              </div>
-            )}
+                  })}
+
+                  {/* Global conclusion */}
+                  <div style={{ padding: "20px 24px", background: "rgba(58,91,160,0.04)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2, marginTop: 8 }}>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#3A5BA0", marginBottom: 10 }}>Conclusion du debriefing</div>
+                    <p style={{ fontSize: 13, color: "#ccc", lineHeight: 1.7, margin: 0 }}>
+                      {strongDims.length > 0 && `Le profil révèle des atouts solides — notamment ${strongDims.slice(0, 3).map(d => d.name).join(", ")} — qui constituent un socle de crédibilité. `}
+                      {weakDims.length === 1
+                        ? `L'axe de progression principal se situe sur ${weakDims[0].name} (${analysis.scoresNorm[weakDims[0].id]}/100). `
+                        : `Les axes de progression se situent sur ${weakDims.map(d => `${d.name} (${analysis.scoresNorm[d.id]}/100)`).join(" et ")}. `}
+                      {`Ce sont des compétences qui se développent — en être conscient est déjà la première étape.`}
+                    </p>
+                  </div>
+
+                  {/* Send debrief email */}
+                  <div style={{ marginTop: 20, padding: "16px 20px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 10 }}>Envoyer le debrief au candidat</div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <input type="email" value={debriefEmail || currentSession.candidateEmail || ""} onChange={e => setDebriefEmail(e.target.value)} placeholder="email du candidat"
+                        style={{ ...input, flex: 1, minWidth: 180, fontSize: 12 }} />
+                      <button onClick={handleSendDebrief} disabled={!(debriefEmail || currentSession.candidateEmail || "").includes("@") || debriefSending}
+                        style={btn((debriefEmail || currentSession.candidateEmail || "").includes("@") && !debriefSending)}>
+                        {debriefSending ? "Envoi..." : debriefSent ? "Envoyé" : "Envoyer le debrief"}
+                      </button>
+                    </div>
+                    {debriefSent && <p style={{ color: "#52B788", fontSize: 12, marginTop: 6, marginBottom: 0 }}>Debrief envoyé avec succes.</p>}
+                    {debriefError && <p style={{ color: "#e74c3c", fontSize: 12, marginTop: 6, marginBottom: 0 }}>{debriefError}</p>}
+                  </div>
+                </div>
+              ) : null;
+            })()}
 
             {/* --- Email section --- */}
             <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40 }}>

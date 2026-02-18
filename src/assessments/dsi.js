@@ -638,6 +638,117 @@ const dsi = {
       { id: "d", text: "Je décide vite et j'ajuste ensuite sans regret", score: 2 },
     ]},
   ],
+
+  // Per-dimension debrief coaching content for low-scoring dimensions
+  debriefContent: {
+    vision: {
+      commentary: "Ce score mesure votre capacité à articuler une vision technologique alignée sur la stratégie de l'entreprise à 3-5 ans. Un score bas indique une approche IT davantage centrée sur la continuité et l'optimisation que sur la création de valeur stratégique. La posture dominante est celle d'un gestionnaire de systèmes plutôt que d'un architecte de la transformation digitale.",
+      actions: [
+        "Construire un schéma directeur SI articulé autour de la stratégie business, pas uniquement autour de l'infrastructure existante.",
+        "Développer un narratif de vision IT à 3-5 ans à présenter au Board — passer de « voici nos projets » à « voici comment la tech transforme notre avantage compétitif ».",
+        "Intégrer la dette technique comme un axe stratégique avec un plan pluriannuel, pas comme un sujet géré au fil de l'eau."
+      ],
+    },
+    leadership: {
+      commentary: "Ce score évalue votre posture de leader d'équipe : développement des talents, gestion des conflits, capacité à fédérer. Un score bas révèle une approche encore directive ou réactive — on tranche les décisions plutôt que de faciliter l'émergence de solutions, on gère les compétences plutôt que de développer les potentiels.",
+      actions: [
+        "Adopter une posture de leader-coach : remplacer les décisions descendantes par des questions ouvertes qui font grandir l'équipe.",
+        "Mettre en place des parcours de carrière clairs et des rituels de feedback structurés (pas seulement l'entretien annuel).",
+        "Développer une marque employeur tech attractive — projets stimulants, contributions open source, conférences."
+      ],
+    },
+    change: {
+      commentary: "Ce score mesure votre capacité à accompagner les transformations organisationnelles : gestion des résistances, communication, embarquement des parties prenantes. Un score bas indique une conduite du changement encore subie plutôt que pilotée — on réagit aux résistances au lieu de les anticiper.",
+      actions: [
+        "Structurer chaque transformation avec un plan de change management dédié : cartographie des parties prenantes, plan de communication, quick wins.",
+        "Identifier et mobiliser des ambassadeurs du changement dans chaque direction métier.",
+        "Mesurer l'adoption (pas seulement le déploiement) avec des indicateurs concrets : taux d'usage, NPS interne, remontées terrain."
+      ],
+    },
+    influence: {
+      commentary: "Ce score évalue votre impact au COMEX : capacité à recadrer les débats en termes de valeur business, à obtenir des arbitrages, à positionner l'IT comme levier stratégique. Un score bas révèle une posture encore technique dans les instances de direction — on défend les projets IT plutôt que de raconter une histoire business.",
+      actions: [
+        "Préparer chaque intervention COMEX avec un angle business-first : ROI chiffré, impact sur les KPIs métiers, pas de jargon technique.",
+        "Co-construire avec le DAF un modèle de pilotage de la valeur IT plutôt que de défendre le budget ligne par ligne.",
+        "Transformer les incidents en opportunités stratégiques — un incident cyber bien communiqué peut renforcer votre influence."
+      ],
+    },
+    budget: {
+      commentary: "Ce score mesure votre rigueur de pilotage financier : business cases, TCO, reporting, capacité à démontrer le ROI. Un score bas indique un pilotage budgétaire encore réactif — on suit les coûts sans véritablement piloter la valeur de chaque euro investi.",
+      actions: [
+        "Systématiser les business cases pour chaque investissement significatif avec des indicateurs de valeur mesurables.",
+        "Mettre en place un reporting financier IT lisible par les non-techniciens — coût par service, coût par utilisateur, TCO.",
+        "Instaurer des revues trimestrielles de ROI des projets livrés — passer du « combien ça coûte » au « combien ça rapporte »."
+      ],
+    },
+    risk: {
+      commentary: "Ce score évalue votre approche de la gestion des risques et de la cybersécurité : anticipation, formalisation, sensibilisation. Un score bas révèle une posture réactive face aux risques — on traite les incidents quand ils arrivent plutôt que de structurer une démarche préventive.",
+      actions: [
+        "Formaliser une cartographie des risques IT actualisée trimestriellement avec un plan de traitement priorisé.",
+        "Mettre en place un plan de continuité d'activité (PCA/PRA) testé régulièrement, pas seulement documenté.",
+        "Lancer un programme de sensibilisation cyber à tous les niveaux de l'organisation — la sécurité est l'affaire de tous, pas seulement de la DSI."
+      ],
+    },
+    complexity: {
+      commentary: "Ce score mesure votre capacité à naviguer dans des environnements techniques et organisationnels complexes : gouvernance, architecture de décision, gestion multi-projets. Un score bas indique une tendance à simplifier les problèmes plutôt qu'à embrasser la complexité avec des frameworks adaptés.",
+      actions: [
+        "Adopter des frameworks de gouvernance adaptés à la complexité (TOGAF, SAFe, ou équivalent pragmatique).",
+        "Documenter les architectures de décision — qui décide quoi, avec quelles données, dans quel délai.",
+        "Mettre en place une cellule d'architecture transverse pour arbitrer les choix technologiques structurants."
+      ],
+    },
+    results: {
+      commentary: "Ce score mesure votre vision du delivery IT : pilotez-vous par les délais et la conformité, ou par la valeur business générée ? Un score bas révèle une conception du delivery centrée sur le respect des engagements initiaux (planning, budget, disponibilité) plutôt que sur la création de valeur mesurable. C'est une vision « IT de production » plus qu'une vision « IT de transformation ».",
+      actions: [
+        "Passer du pilotage par les moyens (planning, budget) au pilotage par les outcomes — chaque livraison doit être mesurée par son impact business (adoption, CA généré, temps gagné).",
+        "Accélérer le cycle de release avec du continuous delivery, des feature flags et du déploiement progressif — les releases peu fréquentes créent de la rigidité.",
+        "Face aux dérives projet, oser le rescoping plutôt que de renforcer le contrôle — réduire le périmètre ou pivoter est plus efficace que des reportings hebdomadaires."
+      ],
+    },
+    innovation: {
+      commentary: "Ce score évalue votre approche de l'innovation : la consommez-vous en la subissant ou la pilotez-vous de manière structurée ? Un score bas indique une posture de veille passive — on observe ce que font les autres plutôt que d'expérimenter activement. L'innovation reste opportuniste, sans budget dédié ni processus formalisé.",
+      actions: [
+        "Instaurer un technology radar actualisé chaque trimestre avec un processus clair (assess / trial / adopt / hold) et des POC réguliers.",
+        "Sanctuariser 5 à 10% du budget IT pour l'expérimentation — sans budget dédié, l'innovation reste de la bonne intention.",
+        "Sur l'IA générative et les technologies émergentes, passer de l'observation à l'action : définir 3 cas d'usage concrets, lancer des pilotes avec des critères de succès mesurables."
+      ],
+    },
+    client: {
+      commentary: "Ce score mesure votre orientation métier : êtes-vous un prestataire qui répond aux demandes, ou un business partner qui co-construit les solutions ? Un score bas indique une relation avec les métiers encore transactionnelle — on livre ce qui est demandé sans vraiment comprendre les enjeux business sous-jacents.",
+      actions: [
+        "Passer du temps sur le terrain avec les équipes métiers — comprendre leurs P&L, leurs KPIs, pas seulement leurs besoins IT.",
+        "Traiter chaque outil interne comme un produit : design thinking, mesure NPS, comités utilisateurs réguliers.",
+        "Face au shadow IT, adopter une posture de compréhension plutôt que de contrôle — c'est un signal que l'offre IT ne répond pas assez vite aux besoins."
+      ],
+    },
+    resilience: {
+      commentary: "Ce score évalue votre gestion du stress et votre capacité à maintenir la performance sous pression : lucidité en situation de crise, priorisation, récupération. Un score bas révèle une tendance à absorber le stress plutôt qu'à le transformer en énergie constructive.",
+      actions: [
+        "Développer des stratégies de priorisation explicites pour les situations de crise — pas tout traiter en même temps, séquencer les urgences.",
+        "Mettre en place des rituels de prise de recul : les meilleures décisions sous pression viennent d'une seconde de pause, pas de la réaction immédiate.",
+        "Construire un réseau de soutien (pairs DSI, coach, mentor) pour prendre du recul dans les moments de forte pression."
+      ],
+    },
+    agility: {
+      commentary: "Ce score mesure votre capacité à pivoter rapidement et à cultiver une culture agile : adaptation, expérimentation, apprentissage continu. Un score bas indique une préférence pour la stabilité et la planification, avec une difficulté à opérer dans l'incertitude.",
+      actions: [
+        "Expérimenter les méthodes agiles à l'échelle — commencer par une équipe pilote, mesurer les résultats, étendre progressivement.",
+        "Cultiver une culture du test & learn : accepter l'échec rapide comme source d'apprentissage, pas comme un problème.",
+        "Réduire les cycles de décision — passer de la validation en comité à l'autonomie des équipes avec des guardrails clairs."
+      ],
+    },
+  },
+
+  // Cross-dimension paradoxes: pairs that reveal interesting coaching insights when scores diverge
+  paradoxes: [
+    { dims: ["agility", "innovation"], gap: 40, insight: "Paradoxe intéressant : vous êtes agile dans l'exécution mais pas dans l'exploration. Vous savez pivoter quand il faut, mais vous ne créez pas les conditions pour que l'innovation émerge." },
+    { dims: ["leadership", "influence"], gap: 30, insight: "Vous êtes un excellent leader d'équipe mais perdez en impact au COMEX. La capacité à fédérer en interne doit se prolonger par un storytelling stratégique convaincant auprès de la Direction." },
+    { dims: ["complexity", "results"], gap: 40, insight: "Vous maîtrisez les environnements complexes mais ne pilotez pas assez par les résultats business. L'excellence architecturale doit se traduire en valeur mesurable." },
+    { dims: ["change", "innovation"], gap: 35, insight: "Vous savez conduire le changement mais n'impulsez pas assez de changements vous-même. Passer de l'accompagnement des transformations à l'initiation des transformations." },
+    { dims: ["vision", "results"], gap: 35, insight: "Décalage entre la vision stratégique et la capacité à la concrétiser en résultats mesurables. La vision doit s'accompagner de métriques d'impact." },
+    { dims: ["resilience", "innovation"], gap: 40, insight: "Votre résilience est un atout, mais elle ne se traduit pas en prise de risque sur l'innovation. La capacité à encaisser la pression devrait vous donner la confiance d'expérimenter davantage." },
+    { dims: ["budget", "innovation"], gap: 35, insight: "Le pilotage financier est maîtrisé mais l'investissement dans l'innovation reste faible. Un bon pilotage budgétaire devrait justement permettre de dégager des marges pour expérimenter." },
+  ],
 };
 
 export default dsi;

@@ -50,16 +50,16 @@ export async function handler(event) {
 
       const dimsHtml = (weakDimensions || []).map(wd => {
         const actionsHtml = (wd.actions || []).map((a, i) =>
-          `<div style="display:flex;gap:8px;padding:8px 12px;margin-bottom:4px;background:rgba(58,91,160,0.06);border:1px solid rgba(58,91,160,0.12);border-radius:3px;">
-            <span style="color:#3A5BA0;font-weight:700;font-size:13px;flex-shrink:0;">${i + 1}.</span>
+          `<div style="display:flex;gap:8px;padding:8px 12px;margin-bottom:4px;background:rgba(254,204,2,0.04);border:1px solid rgba(254,204,2,0.12);border-radius:3px;">
+            <span style="color:#E5B800;font-weight:700;font-size:13px;flex-shrink:0;">${i + 1}.</span>
             <span style="color:#bbb;font-size:13px;line-height:1.5;">${a}</span>
           </div>`
         ).join("");
         return `
           <div style="margin-bottom:24px;padding:20px 24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:4px;">
             <div style="font-size:16px;font-weight:600;color:#f0f0f0;margin-bottom:4px;">${wd.icon} ${wd.name} — <span style="color:${wd.levelColor};">${wd.score}/100</span></div>
-            <p style="color:#bbb;font-size:13px;line-height:1.7;margin:12px 0 16px;padding-left:8px;border-left:2px solid rgba(58,91,160,0.3);">${wd.commentary}</p>
-            <div style="font-size:11px;letter-spacing:2px;color:#3A5BA0;text-transform:uppercase;margin-bottom:8px;font-weight:600;">Actions recommandées</div>
+            <p style="color:#bbb;font-size:13px;line-height:1.7;margin:12px 0 16px;padding-left:8px;border-left:2px solid rgba(254,204,2,0.3);">${wd.commentary}</p>
+            <div style="font-size:11px;letter-spacing:2px;color:#E5B800;text-transform:uppercase;margin-bottom:8px;font-weight:600;">Actions recommandées</div>
             ${actionsHtml}
           </div>`;
       }).join("");
@@ -70,9 +70,9 @@ export async function handler(event) {
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0; padding:0; background:#0a0b0e; font-family:'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:600px; margin:0 auto; padding:0;">
-    <div style="background:linear-gradient(135deg, #3A5BA0 0%, #2D4A8A 100%); padding:28px 40px; text-align:center;">
-      <div style="font-size:11px; letter-spacing:6px; color:rgba(255,255,255,0.7); text-transform:uppercase; font-weight:600; margin-bottom:4px;">${cfg.contactName}</div>
-      <div style="font-size:20px; color:#fff; font-weight:700; letter-spacing:1px;">Debriefing DSI Profile™</div>
+    <div style="background:linear-gradient(135deg, #FECC02 0%, #E5B800 100%); padding:28px 40px; text-align:center;">
+      <div style="font-size:11px; letter-spacing:6px; color:#0a0b0e; text-transform:uppercase; font-weight:700; margin-bottom:4px;">${cfg.contactName}</div>
+      <div style="font-size:20px; color:#0a0b0e; font-weight:700; letter-spacing:1px;">Debriefing DSI Profile™</div>
     </div>
     <div style="padding:36px 40px 28px;">
       <p style="color:#f0f0f0; font-size:16px; margin:0 0 8px;">Bonjour ${candidateName},</p>
@@ -95,20 +95,14 @@ export async function handler(event) {
       ${paradoxesHtml ? `<div style="margin-bottom:24px;">${paradoxesHtml}</div>` : ""}
 
       ${dimsHtml ? `
-      <div style="font-size:11px; letter-spacing:3px; color:#3A5BA0; text-transform:uppercase; margin-bottom:16px; font-weight:600;">Axes de développement</div>
+      <div style="font-size:11px; letter-spacing:3px; color:#E5B800; text-transform:uppercase; margin-bottom:16px; font-weight:600;">Axes de développement</div>
       ${dimsHtml}` : ""}
 
       ${conclusion ? `
-      <div style="padding:20px 24px; background:rgba(58,91,160,0.06); border:1px solid rgba(58,91,160,0.15); border-radius:4px; margin-bottom:24px;">
-        <div style="font-size:11px; letter-spacing:2px; color:#3A5BA0; text-transform:uppercase; margin-bottom:8px; font-weight:600;">En résumé</div>
+      <div style="padding:20px 24px; background:rgba(254,204,2,0.04); border:1px solid rgba(254,204,2,0.12); border-radius:4px; margin-bottom:24px;">
+        <div style="font-size:11px; letter-spacing:2px; color:#E5B800; text-transform:uppercase; margin-bottom:8px; font-weight:600;">En résumé</div>
         <p style="color:#ccc; font-size:13px; line-height:1.7; margin:0;">${conclusion}</p>
       </div>` : ""}
-
-      <div style="text-align:center; margin-bottom:28px;">
-        <a href="https://calendar.app.google/ND296BBPA6AN5FNX8" style="display:inline-block; padding:14px 36px; background:linear-gradient(135deg,#3A5BA0,#2D4A8A); color:#fff; text-decoration:none; font-weight:700; font-size:13px; letter-spacing:2px; text-transform:uppercase; border-radius:4px;">
-          Réserver un suivi
-        </a>
-      </div>
 
       <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:24px;">
         <p style="color:#ccc; font-size:13px; line-height:1.8; margin:0;">
@@ -211,6 +205,9 @@ export async function handler(event) {
           Consulter mon rapport complet
         </a>
         <p style="color:#666; font-size:12px; margin-top:16px;">Code d'accès : <strong style="color:#FECC02; letter-spacing:2px;">${resultsCode}</strong></p>
+        <p style="color:#999; font-size:13px; margin-top:20px; line-height:1.6;">
+          <a href="https://calendar.app.google/ND296BBPA6AN5FNX8" style="color:#FECC02; font-weight:600; text-decoration:underline;">Réservez un créneau</a> pour que l'on debriefe ensemble de votre test.
+        </p>
       </div>
 
       <!-- Divider -->

@@ -995,6 +995,14 @@ export default function App() {
         </div>
         ` : ""}
 
+        <!-- Methodology -->
+        ${currentAssessment.methodology?.summary ? `
+        <div style="padding:8px 10px;background:#f8f8f8;border:1px solid #e8e8e8;border-radius:2px;margin-bottom:10px">
+          <div style="font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888;font-weight:600;margin-bottom:4px">À propos de cette évaluation</div>
+          <div style="font-size:7.5px;line-height:1.6;color:#666">${currentAssessment.methodology.summary}</div>
+        </div>
+        ` : ""}
+
         <!-- Footer -->
         <div style="text-align:center;padding-top:6px;border-top:1px solid #eee;font-size:8px;color:#aaa">
           ${currentAssessment.label} · Rapport confidentiel · ${anonRef}
@@ -1883,6 +1891,14 @@ export default function App() {
               {emailSent && <p style={{ color: "#52B788", fontSize: 13, marginTop: 8 }}>✓ Email envoyé avec succès !</p>}
               {emailError && <p style={{ color: "#e74c3c", fontSize: 13, marginTop: 8 }}>{emailError}</p>}
             </div>
+
+            {/* --- Methodology explanation (visible in PDF) --- */}
+            {currentAssessment.methodology?.summary && (
+              <div data-section="methodology" style={{ ...box, padding: "24px 28px", marginBottom: 40 }}>
+                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, letterSpacing: 3, textTransform: "uppercase", color: "#888", marginBottom: 12 }}>À propos de cette évaluation</h3>
+                <p style={{ fontSize: 12, lineHeight: 1.8, color: "#999", margin: 0 }}>{currentAssessment.methodology.summary}</p>
+              </div>
+            )}
 
             {/* --- Footer --- */}
             <div data-section="footer" style={{ textAlign: "center", padding: "32px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>

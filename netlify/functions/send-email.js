@@ -33,6 +33,9 @@ export async function handler(event) {
 
     const siteUrl = process.env.URL || "https://amarillo-dsi-profile.netlify.app";
 
+    const logoWhiteUrl = `${siteUrl}/amarillo-logo-white.png`;
+    const logoDarkUrl = `${siteUrl}/amarillo-logo-dark.png`;
+
     // === DEBRIEF EMAIL ===
     if (type === "debrief") {
       const { profileType, globalScore, strongPoints, weakDimensions, paradoxes, conclusion } = body;
@@ -70,9 +73,9 @@ export async function handler(event) {
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0; padding:0; background:#0a0b0e; font-family:'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:600px; margin:0 auto; padding:0;">
-    <div style="background:linear-gradient(135deg, #FECC02 0%, #E5B800 100%); padding:28px 40px; text-align:center;">
-      <div style="font-size:11px; letter-spacing:6px; color:#0a0b0e; text-transform:uppercase; font-weight:700; margin-bottom:4px;">${cfg.contactName}</div>
-      <div style="font-size:20px; color:#0a0b0e; font-weight:700; letter-spacing:1px;">Debriefing DSI Profile™</div>
+    <div style="background:#0a0b0e; padding:28px 40px; text-align:center; border-bottom:3px solid #FECC02;">
+      <img src="${logoWhiteUrl}" alt="${cfg.contactName}" style="height:36px; margin-bottom:10px;" />
+      <div style="font-size:11px; letter-spacing:4px; color:#FECC02; text-transform:uppercase; font-weight:600;">Debriefing DSI Profile™</div>
     </div>
     <div style="padding:36px 40px 28px;">
       <p style="color:#f0f0f0; font-size:16px; margin:0 0 8px;">Bonjour ${candidateName},</p>
@@ -107,13 +110,14 @@ export async function handler(event) {
       <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:24px;">
         <p style="color:#ccc; font-size:13px; line-height:1.8; margin:0;">
           <strong style="color:#f0f0f0;">${cfg.contactName}</strong><br>
-          ${cfg.contactDesc}<br>
+          <span style="color:#999; font-size:12px;">Cabinet de search et d'approche directe spécialisé dans le recrutement de profils middle et top management pour des rôles à enjeu stratégique.</span><br>
           <a href="mailto:${cfg.contactEmail}" style="color:#FECC02; text-decoration:none;">${cfg.contactEmail}</a>
         </p>
       </div>
     </div>
     <div style="background:rgba(255,255,255,0.02); padding:20px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
-      <p style="color:#555; font-size:11px; margin:0;">${cfg.contactName} · DSI Profile™ · Document confidentiel</p>
+      <img src="${logoWhiteUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.4;" />
+      <p style="color:#555; font-size:11px; margin:0;">DSI Profile™ · Document confidentiel</p>
     </div>
   </div>
 </body>
@@ -160,9 +164,9 @@ export async function handler(event) {
   <div style="max-width:600px; margin:0 auto; padding:0;">
 
     <!-- Header band -->
-    <div style="background:linear-gradient(135deg, #FECC02 0%, #E5B800 100%); padding:32px 40px; text-align:center;">
-      <div style="font-size:11px; letter-spacing:6px; color:#0a0b0e; text-transform:uppercase; font-weight:700; margin-bottom:4px;">${cfg.contactName}</div>
-      <div style="font-size:22px; color:#0a0b0e; font-weight:700; letter-spacing:1px;">DSI Profile™</div>
+    <div style="background:linear-gradient(135deg, #FECC02 0%, #E5B800 100%); padding:28px 40px; text-align:center;">
+      <img src="${logoDarkUrl}" alt="${cfg.contactName}" style="height:36px; margin-bottom:8px;" />
+      <div style="font-size:11px; letter-spacing:4px; color:#0a0b0e; text-transform:uppercase; font-weight:600;">DSI Profile™</div>
     </div>
 
     <div style="padding:40px 40px 32px;">
@@ -226,7 +230,7 @@ export async function handler(event) {
         <div style="font-size:11px; letter-spacing:3px; color:#FECC02; text-transform:uppercase; margin-bottom:12px; font-weight:600;">Une question ? Contactez-nous</div>
         <p style="color:#ccc; font-size:14px; line-height:1.8; margin:0;">
           <strong style="color:#f0f0f0;">${cfg.contactName}</strong><br>
-          ${cfg.contactDesc}<br>
+          <span style="color:#999; font-size:12px;">Cabinet de search et d'approche directe spécialisé dans le recrutement de profils middle et top management pour des rôles à enjeu stratégique.</span><br>
           <a href="mailto:${cfg.contactEmail}" style="color:#FECC02; text-decoration:none;">${cfg.contactEmail}</a><br>
           <a href="${websiteHref}" style="color:#FECC02; text-decoration:none;">${cfg.contactWebsite}</a>
         </p>
@@ -236,8 +240,8 @@ export async function handler(event) {
 
     <!-- Footer -->
     <div style="background:rgba(255,255,255,0.02); padding:24px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
-      <p style="color:#555; font-size:11px; letter-spacing:2px; text-transform:uppercase; margin:0 0 8px;">${cfg.contactName} · DSI Profile™</p>
-      <p style="color:#444; font-size:11px; margin:0;">Ce rapport est strictement confidentiel et destiné uniquement au candidat évalué.</p>
+      <img src="${logoDarkUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.3;" />
+      <p style="color:#444; font-size:11px; margin:0;">DSI Profile™ · Ce rapport est strictement confidentiel.</p>
     </div>
 
   </div>

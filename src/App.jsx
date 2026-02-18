@@ -214,6 +214,15 @@ function normalizeScore(raw) {
   return Math.round(Math.max(0, Math.min(100, normalized * 100)));
 }
 
+// Backward-compat helpers: answers can be a number (legacy) or {s: score, r: "cadb"} (new)
+function answerScore(val) { return typeof val === "object" && val !== null ? val.s : val; }
+function answerRanking(val) { return typeof val === "object" && val !== null ? val.r : null; }
+function hasRankingData(session) {
+  return Object.values(session.answers || {}).some(arr =>
+    Array.isArray(arr) && arr.some(v => typeof v === "object" && v !== null && v.r)
+  );
+}
+
 // Significance vs random: compute z-score using permutation variance
 // Var[single_question] = (1/(n-1)) * Σ(w_i - w̄)² * Σ(s_j - s̄)² / (Σw)²
 // where n=4, s=[1,2,3,4], w=RANK_WEIGHTS
@@ -424,8 +433,8 @@ function computeReliability(session, assessment) {
     // Find the answer index for the original question with the matching order
     const orderList = dimOrderMap[pair.originalDim] || [];
     const origIdx = orderList.indexOf(pair.originalOrder);
-    const origScore = origIdx >= 0 ? originalScores[origIdx] : undefined;
-    const mirrorScore = mirrorScores.length > 0 ? mirrorScores[0] : undefined;
+    const origScore = origIdx >= 0 ? answerScore(originalScores[origIdx]) : undefined;
+    const mirrorScore = mirrorScores.length > 0 ? answerScore(mirrorScores[0]) : undefined;
     if (origScore === undefined || mirrorScore === undefined) return null;
     const gap = Math.abs(origScore - mirrorScore);
     return { ...pair, origScore, mirrorScore, gap, coherent: gap <= threshold };
@@ -440,7 +449,7 @@ function computeReliability(session, assessment) {
   // --- Desirability score ---
   const desScores = answers.desirability || [];
   const desirabilityRaw = desScores.length > 0
-    ? desScores.reduce((a, b) => a + b, 0) / desScores.length
+    ? desScores.reduce((a, v) => a + answerScore(v), 0) / desScores.length
     : null;
   const desirabilityScore = desirabilityRaw !== null
     ? Math.round(Math.max(0, Math.min(100, ((4 - desirabilityRaw) / 3) * 100)))
@@ -481,6 +490,48 @@ function computeReliability(session, assessment) {
     avgTimePerQ, timeLevel,
     globalVerdict, redFlags, yellowFlags,
   };
+}
+
+// Rebuild full question from stripped session data + assessment config
+function reconstructQuestion(strippedQ, assessment) {
+  if (strippedQ.mirrorOf) {
+    return assessment.questions.find(q => q.dim === strippedQ.mirrorOf && q.order === (strippedQ.order || 1));
+  }
+  return assessment.questions.find(q => q.dim === strippedQ.dim && q.order === strippedQ.order);
+}
+
+// Analyze a candidate's answer vs ideal ranking, with dynamic coaching
+function analyzeAnswer(answerVal, question) {
+  if (!question || !question.options) return null;
+  const ideal = [...question.options].sort((a, b) => b.score - a.score).map(o => o.id).join("");
+  const candidateRanking = answerRanking(answerVal);
+  if (!candidateRanking) return null;
+  const comparisons = candidateRanking.split("").map((optId, pos) => {
+    const opt = question.options.find(o => o.id === optId);
+    const idealPos = ideal.indexOf(optId);
+    return { optId, text: opt?.text || "", score: opt?.score || 0, candidatePos: pos, idealPos, delta: pos - idealPos };
+  });
+  // Dynamic coaching: only when candidate's #1 pick is not the ideal #1
+  let coaching = null;
+  const candidateFirst = question.options.find(o => o.id === candidateRanking[0]);
+  const idealFirst = question.options.find(o => o.id === ideal[0]);
+  if (candidateFirst && idealFirst && candidateRanking[0] !== ideal[0]) {
+    const cs = candidateFirst.score;
+    const gap = cs === 1 ? "reactive" : cs === 2 ? "operational" : "inverted";
+    const gapLabel = cs === 1 ? "posture réactive" : cs === 2 ? "posture opérationnelle" : "bonne intuition mais priorités à affiner";
+    const transition = cs <= 2
+      ? `Passez d'une ${gapLabel} à une approche plus stratégique : « ${idealFirst.text} ».`
+      : `Votre intuition est bonne mais l'ordre de priorité est à revoir. Priorisez : « ${idealFirst.text} ».`;
+    coaching = {
+      candidateChoice: candidateFirst.text,
+      idealChoice: idealFirst.text,
+      candidateScore: cs,
+      gap,
+      gapLabel,
+      tip: `Vous avez priorisé « ${candidateFirst.text} » (${gapLabel}). ${transition}`,
+    };
+  }
+  return { ideal, candidateRanking, comparisons, score: answerScore(answerVal), coaching };
 }
 
 // ============================================================
@@ -654,6 +705,8 @@ export default function App() {
   const handleRankComplete = async (rankedOptions) => {
     const q = questions[currentQ];
     const ws = rankedOptions.reduce((s, o, i) => s + o.score * RANK_WEIGHTS[i], 0) / RANK_WEIGHTS.reduce((a, b) => a + b, 0);
+    const rankStr = rankedOptions.map(o => o.id).join("");
+    const answerVal = { s: ws, r: rankStr };
     const newAnswers = { ...currentSession.answers };
     if (!newAnswers[q.dim]) newAnswers[q.dim] = [];
 
@@ -661,9 +714,9 @@ export default function App() {
     const dimQsBefore = questions.slice(0, currentQ).filter(qq => qq.dim === q.dim).length;
     // Replace if going back, or append if new
     if (dimQsBefore < newAnswers[q.dim].length) {
-      newAnswers[q.dim][dimQsBefore] = ws;
+      newAnswers[q.dim][dimQsBefore] = answerVal;
     } else {
-      newAnswers[q.dim] = [...newAnswers[q.dim], ws];
+      newAnswers[q.dim] = [...newAnswers[q.dim], answerVal];
     }
 
     const elapsed = elapsedBefore + (Date.now() - startTime);
@@ -701,7 +754,7 @@ export default function App() {
     currentAssessment.dimensions.forEach((dim) => {
       const arr = currentSession.answers[dim.id] || [];
       if (arr.length === 0) { scores[dim.id] = 0; return; }
-      scores[dim.id] = arr.reduce((a, b) => a + b, 0) / arr.length;
+      scores[dim.id] = arr.reduce((a, v) => a + answerScore(v), 0) / arr.length;
     });
     return scores;
   };
@@ -1738,6 +1791,19 @@ export default function App() {
               </div>
             )}
 
+            {/* --- Candidate debrief CTA (non-admin only) --- */}
+            {!isAdminView && (
+              <div style={{ padding: "24px 32px", marginBottom: 40, background: "rgba(58,91,160,0.04)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2, textAlign: "center" }}>
+                <p style={{ fontSize: 15, color: "#ccc", lineHeight: 1.7, margin: 0 }}>
+                  <a href="https://calendar.app.google/ND296BBPA6AN5FNX8" target="_blank" rel="noopener noreferrer"
+                    style={{ color: "#FECC02", fontWeight: 600, textDecoration: "underline" }}>
+                    Réservez un créneau
+                  </a>{" "}
+                  pour que l'on debriefe ensemble de votre test.
+                </p>
+              </div>
+            )}
+
             {/* --- Reliability indicators (admin-only) --- */}
             {isAdminView && reliability && (
               <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: `4px solid ${reliability.globalVerdict.color}` }}>
@@ -1873,6 +1939,94 @@ export default function App() {
                     })}
                   </div>
                 </details>
+              </div>
+            )}
+
+            {/* --- Admin Q&A Detail for Debrief --- */}
+            {isAdminView && (
+              <div data-pdf-hide="true" style={{ ...box, padding: 32, marginBottom: 40, borderLeft: "4px solid #3A5BA0" }}>
+                <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#3A5BA0", marginBottom: 8 }}>Détail Questions / Réponses — Debriefing</h3>
+                <p style={{ fontSize: 11, color: "#555", marginBottom: 20, fontFamily: "'DM Mono', monospace" }}>Visible uniquement par l'administrateur · Classement du candidat vs classement idéal</p>
+
+                {!hasRankingData(currentSession) ? (
+                  <div style={{ padding: "16px 20px", background: "rgba(254,204,2,0.04)", border: "1px solid rgba(254,204,2,0.15)", borderRadius: 2, fontSize: 13, color: "#FECC02" }}>
+                    ⚠ Session antérieure — les données de classement détaillé ne sont pas disponibles pour cette session. Seuls les scores agrégés sont visibles.
+                  </div>
+                ) : (
+                  currentAssessment.pillars.map((pillar, pi) => {
+                    const pillarDims = currentAssessment.dimensions.filter(d => d.pillar === pi);
+                    return (
+                      <details key={pi} style={{ marginBottom: 12 }}>
+                        <summary style={{ fontSize: 13, fontWeight: 600, color: pillar.color, cursor: "pointer", fontFamily: "'DM Mono', monospace", padding: "8px 0", borderBottom: `1px solid ${pillar.color}22` }}>
+                          {pillar.name}
+                        </summary>
+                        <div style={{ paddingTop: 12 }}>
+                          {pillarDims.map(dim => {
+                            const dimAnswers = currentSession.answers[dim.id] || [];
+                            const sessionQs = (currentSession.questions || []).filter(q => q.dim === dim.id && !q.mirrorOf);
+                            const normScore = analysis.scoresNorm[dim.id];
+                            const level = getScoreLevel(normScore);
+                            return (
+                              <details key={dim.id} style={{ marginBottom: 8, marginLeft: 12 }}>
+                                <summary style={{ fontSize: 12, color: "#ccc", cursor: "pointer", fontFamily: "'DM Mono', monospace", padding: "6px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span>{dim.icon} {dim.name}</span>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: level.color, fontFamily: "'DM Mono', monospace" }}>{normScore}/100</span>
+                                  <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 2, background: `${level.color}15`, color: level.color }}>{level.label}</span>
+                                </summary>
+                                <div style={{ paddingTop: 8, paddingLeft: 8 }}>
+                                  {sessionQs.map((sq, qIdx) => {
+                                    const fullQ = reconstructQuestion(sq, currentAssessment);
+                                    const ansVal = dimAnswers[qIdx];
+                                    if (!fullQ || ansVal === undefined) return null;
+                                    const result = analyzeAnswer(ansVal, fullQ);
+                                    if (!result) return (
+                                      <div key={qIdx} style={{ padding: "8px 12px", marginBottom: 6, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, fontSize: 12, color: "#666" }}>
+                                        Q{qIdx + 1} — Données de classement non disponibles
+                                      </div>
+                                    );
+                                    return (
+                                      <div key={qIdx} style={{ padding: "12px 16px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                                        <div style={{ fontSize: 12, color: "#ddd", marginBottom: 10, lineHeight: 1.5 }}>
+                                          <strong style={{ color: "#f0f0f0" }}>Q{qIdx + 1}.</strong> {fullQ.text}
+                                        </div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: result.coaching ? 10 : 0 }}>
+                                          {result.comparisons.map((c, ci) => {
+                                            const match = c.delta === 0;
+                                            const close = Math.abs(c.delta) === 1;
+                                            const color = match ? "#52B788" : close ? "#FECC02" : "#e74c3c";
+                                            const bg = match ? "rgba(82,183,136,0.06)" : close ? "rgba(254,204,2,0.04)" : "rgba(231,76,60,0.06)";
+                                            return (
+                                              <div key={ci} style={{ padding: "6px 10px", background: bg, border: `1px solid ${color}22`, borderRadius: 2, fontSize: 11, color: "#bbb", lineHeight: 1.4 }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                                                  <span style={{ color, fontWeight: 600, fontFamily: "'DM Mono', monospace" }}>
+                                                    {match ? "✓" : close ? "~" : "✗"} #{c.candidatePos + 1}
+                                                  </span>
+                                                  <span style={{ fontSize: 10, color: "#666", fontFamily: "'DM Mono', monospace" }}>
+                                                    idéal #{c.idealPos + 1}
+                                                  </span>
+                                                </div>
+                                                <div style={{ fontSize: 10, color: "#999" }}>{c.text}</div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        {result.coaching && (
+                                          <div style={{ padding: "8px 12px", background: "rgba(58,91,160,0.06)", border: "1px solid rgba(58,91,160,0.15)", borderRadius: 2, fontSize: 11, color: "#8FAEE0", lineHeight: 1.5 }}>
+                                            💡 {result.coaching.tip}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </details>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  })
+                )}
               </div>
             )}
 

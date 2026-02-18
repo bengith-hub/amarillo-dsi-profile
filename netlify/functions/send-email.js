@@ -101,6 +101,14 @@ export async function handler(event) {
       <!-- Divider -->
       <div style="border-top:1px solid rgba(255,255,255,0.06); margin-bottom:32px;"></div>
 
+      <!-- Methodology explanation -->
+      <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:24px 28px; margin-bottom:24px;">
+        <div style="font-size:11px; letter-spacing:3px; color:#888; text-transform:uppercase; margin-bottom:12px; font-weight:600;">À propos de cette évaluation</div>
+        <p style="color:#999; font-size:12px; line-height:1.8; margin:0;">
+          Le DSI Profile™ est un outil d'évaluation comportementale conçu pour cartographier les compétences managériales des dirigeants IT. Fondé sur le Competing Values Framework (Quinn &amp; Rohrbaugh), la théorie du leadership transformationnel (Bass &amp; Avolio) et les référentiels de maturité IT (COBIT, CMMI), il évalue 12 dimensions regroupées en 3 piliers : Leadership &amp; Influence, Excellence Opérationnelle et Innovation &amp; Posture. Le candidat répond à des mises en situation professionnelles (Situational Judgment Test) en classant 4 options de la plus à la moins représentative de son approche. Ce format à choix forcé, reconnu pour sa validité prédictive, réduit les biais de désirabilité sociale. Les scores sont normalisés sur une échelle de 0 à 100. Cet outil est un instrument d'aide au recrutement et de développement professionnel.
+        </p>
+      </div>
+
       <!-- Contact block -->
       <div style="background:rgba(254,204,2,0.04); border:1px solid rgba(254,204,2,0.1); border-radius:4px; padding:24px 28px; margin-bottom:32px;">
         <div style="font-size:11px; letter-spacing:3px; color:#FECC02; text-transform:uppercase; margin-bottom:12px; font-weight:600;">Une question ? Contactez-nous</div>

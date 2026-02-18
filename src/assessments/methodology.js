@@ -5,6 +5,11 @@
 
 const methodology = {
   title: "Méthodologie Amarillo Profile™",
+
+  // Paragraphe synthétique destiné aux PDF et emails — permet à un tiers
+  // (recruteur, dirigeant) de comprendre rapidement l'outil et sa méthode.
+  summary: "Le DSI Profile™ est un outil d'évaluation comportementale conçu pour cartographier les compétences managériales des dirigeants IT. Fondé sur le Competing Values Framework (Quinn & Rohrbaugh), la théorie du leadership transformationnel (Bass & Avolio) et les référentiels de maturité IT (COBIT, CMMI), il évalue 12 dimensions regroupées en 3 piliers : Leadership & Influence, Excellence Opérationnelle et Innovation & Posture. Le candidat répond à des mises en situation professionnelles (Situational Judgment Test) en classant 4 options de la plus à la moins représentative de son approche. Ce format à choix forcé, reconnu pour sa validité prédictive, réduit les biais de désirabilité sociale. Les scores sont normalisés sur une échelle de 0 à 100 et des indicateurs de fiabilité intégrés (cohérence interne, détection de désirabilité) garantissent la qualité des résultats. Cet outil est un instrument d'aide au recrutement et de développement professionnel — il ne constitue pas un diagnostic psychométrique clinique.",
+
   sections: [
     {
       heading: "Fondements théoriques",

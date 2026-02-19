@@ -36,6 +36,143 @@ export async function handler(event) {
     const logoWhiteUrl = `${siteUrl}/amarillo-logo-white.png`;
     const logoDarkUrl = `${siteUrl}/amarillo-logo-dark.png`;
 
+    // Ensure website has protocol for href (shared across all email types)
+    const websiteHref = cfg.contactWebsite.startsWith("http") ? cfg.contactWebsite : `https://${cfg.contactWebsite}`;
+
+    // === INVITATION EMAIL ===
+    if (type === "invitation") {
+      const { accessCode, assessmentLabel, candidateRole, invitation } = body;
+
+      if (!accessCode) {
+        return { statusCode: 400, body: JSON.stringify({ error: "Missing access code" }) };
+      }
+
+      const inv = invitation || {};
+      const whatTitle = inv.what?.title || "À propos de cette évaluation";
+      const whatText = inv.what?.text || "";
+      const whyTitle = inv.why?.title || "Pourquoi passer cette évaluation ?";
+      const whyItems = inv.why?.items || [];
+      const howTitle = inv.how?.title || "Comment ça se passe ?";
+      const howText = inv.how?.text || "";
+      const afterText = inv.after || "";
+
+      const whyHtml = whyItems.map(item =>
+        `<li style="color:#ccc; font-size:13px; line-height:1.8;">${item}</li>`
+      ).join("");
+
+      const invitationHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0; padding:0; background:#0a0b0e; font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px; margin:0 auto; padding:0;">
+
+    <!-- Header band -->
+    <div style="background:linear-gradient(135deg, #FECC02 0%, #E5B800 100%); padding:28px 40px; text-align:center;">
+      <img src="${logoDarkUrl}" alt="${cfg.contactName}" style="height:36px; margin-bottom:8px;" />
+      <div style="font-size:11px; letter-spacing:4px; color:#0a0b0e; text-transform:uppercase; font-weight:600;">
+        Invitation — ${assessmentLabel || "Évaluation"}
+      </div>
+    </div>
+
+    <div style="padding:40px 40px 32px;">
+
+      <!-- Greeting -->
+      <p style="color:#f0f0f0; font-size:16px; margin:0 0 8px;">Bonjour ${candidateName},</p>
+      <p style="color:#999; font-size:14px; line-height:1.7; margin:0 0 28px;">
+        Dans le cadre ${candidateRole ? `du poste de <strong style="color:#f0f0f0;">${candidateRole}</strong>` : "de votre accompagnement"}, nous vous invitons à compléter l'évaluation <strong style="color:#FECC02;">${assessmentLabel || "Amarillo Profile™"}</strong>.
+      </p>
+
+      <!-- What is this assessment? -->
+      ${whatText ? `
+      <div style="background:rgba(254,204,2,0.06); border:1px solid rgba(254,204,2,0.15); border-radius:4px; padding:24px 28px; margin-bottom:20px;">
+        <div style="font-size:11px; letter-spacing:3px; color:#FECC02; text-transform:uppercase; margin-bottom:12px; font-weight:600;">${whatTitle}</div>
+        <p style="color:#ccc; font-size:13px; line-height:1.8; margin:0;">${whatText}</p>
+      </div>
+      ` : ""}
+
+      <!-- Why take it? -->
+      ${whyHtml ? `
+      <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:24px 28px; margin-bottom:20px;">
+        <div style="font-size:11px; letter-spacing:3px; color:#52B788; text-transform:uppercase; margin-bottom:12px; font-weight:600;">${whyTitle}</div>
+        <ul style="margin:0; padding-left:20px;">${whyHtml}</ul>
+      </div>
+      ` : ""}
+
+      <!-- How it works -->
+      ${howText ? `
+      <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:4px; padding:24px 28px; margin-bottom:28px;">
+        <div style="font-size:11px; letter-spacing:3px; color:#888; text-transform:uppercase; margin-bottom:12px; font-weight:600;">${howTitle}</div>
+        <p style="color:#ccc; font-size:13px; line-height:1.8; margin:0;">${howText}</p>
+      </div>
+      ` : ""}
+
+      <!-- CTA: Access code + button -->
+      <div style="text-align:center; margin-bottom:32px; padding:28px; background:rgba(254,204,2,0.04); border:1px solid rgba(254,204,2,0.1); border-radius:4px;">
+        <p style="color:#999; font-size:13px; margin:0 0 16px;">Votre code d'accès personnel :</p>
+        <div style="font-family:'Courier New',monospace; font-size:28px; font-weight:700; letter-spacing:6px; color:#FECC02; margin-bottom:20px;">${accessCode}</div>
+        <a href="${siteUrl}" style="display:inline-block; padding:16px 40px; background:linear-gradient(135deg,#FECC02,#E5B800); color:#0a0b0e; text-decoration:none; font-weight:700; font-size:14px; letter-spacing:2px; text-transform:uppercase; border-radius:4px;">
+          Commencer l'évaluation
+        </a>
+        <p style="color:#666; font-size:12px; margin-top:16px; line-height:1.6;">
+          Cliquez sur le bouton ci-dessus, puis entrez votre code d'accès pour démarrer.
+        </p>
+      </div>
+
+      <!-- After / Debrief mention -->
+      ${afterText ? `
+      <div style="padding:16px 20px; background:rgba(58,91,160,0.08); border:1px solid rgba(58,91,160,0.15); border-radius:4px; margin-bottom:28px;">
+        <p style="color:#ccc; font-size:13px; line-height:1.7; margin:0;">
+          <strong style="color:#f0f0f0;">Et après ?</strong> ${afterText}
+        </p>
+      </div>
+      ` : ""}
+
+      <!-- Divider -->
+      <div style="border-top:1px solid rgba(255,255,255,0.06); margin-bottom:28px;"></div>
+
+      <!-- Contact block -->
+      <div style="background:rgba(254,204,2,0.04); border:1px solid rgba(254,204,2,0.1); border-radius:4px; padding:24px 28px;">
+        <div style="font-size:11px; letter-spacing:3px; color:#FECC02; text-transform:uppercase; margin-bottom:12px; font-weight:600;">Une question ? Contactez-nous</div>
+        <p style="color:#ccc; font-size:14px; line-height:1.8; margin:0;">
+          <strong style="color:#f0f0f0;">${cfg.contactName}</strong><br>
+          <span style="color:#999; font-size:12px;">${cfg.contactDesc}</span><br>
+          <a href="mailto:${cfg.contactEmail}" style="color:#FECC02; text-decoration:none;">${cfg.contactEmail}</a><br>
+          <a href="${websiteHref}" style="color:#FECC02; text-decoration:none;">${cfg.contactWebsite}</a>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div style="background:rgba(255,255,255,0.02); padding:24px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
+      <img src="${logoDarkUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.3;" />
+      <p style="color:#444; font-size:11px; margin:0;">${assessmentLabel || "Amarillo Profile™"} · ${cfg.contactName}</p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+      const invRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${RESEND_API_KEY}` },
+        body: JSON.stringify({
+          from: `${cfg.senderName} <${cfg.senderEmail}>`,
+          to: [to],
+          subject: `Invitation — ${assessmentLabel || "Évaluation"} · ${candidateName}`,
+          html: invitationHtml,
+        }),
+      });
+
+      const invData = await invRes.json();
+      if (!invRes.ok) {
+        console.error("Resend invitation error:", invData);
+        return { statusCode: invRes.status, body: JSON.stringify({ error: invData.message || "Invitation email failed" }) };
+      }
+      return { statusCode: 200, body: JSON.stringify({ success: true, id: invData.id }) };
+    }
+
     // === DEBRIEF EMAIL ===
     if (type === "debrief") {
       const { profileType, globalScore, strongPoints, weakDimensions, paradoxes, conclusion } = body;
@@ -152,9 +289,6 @@ export async function handler(event) {
     const developmentHtml = (topDevelopment || []).map(s =>
       `<li style="color:#ccc; font-size:14px; line-height:1.8;">${s}</li>`
     ).join("");
-
-    // Ensure website has protocol for href
-    const websiteHref = cfg.contactWebsite.startsWith("http") ? cfg.contactWebsite : `https://${cfg.contactWebsite}`;
 
     const htmlBody = `
 <!DOCTYPE html>

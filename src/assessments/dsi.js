@@ -13,6 +13,28 @@ const dsi = {
   defaultRole: "DSI",
   pdfPrefix: "DSI-Profile",
 
+  invitation: {
+    what: {
+      title: "Qu'est-ce que le DSI Profile™ ?",
+      text: "Le DSI Profile™ est un outil d'évaluation comportementale qui cartographie vos compétences managériales à travers des mises en situation professionnelles concrètes. Fondé sur des cadres de référence reconnus (Competing Values Framework, leadership transformationnel, référentiels COBIT/CMMI), il évalue <strong style=\"color:#f0f0f0;\">12 dimensions</strong> regroupées en 3 piliers : Leadership &amp; Influence, Excellence Opérationnelle et Innovation &amp; Posture.",
+    },
+    why: {
+      title: "Pourquoi passer cette évaluation ?",
+      items: [
+        "Obtenez une <strong style=\"color:#f0f0f0;\">cartographie objective</strong> de vos compétences managériales",
+        "Identifiez vos <strong style=\"color:#f0f0f0;\">points forts</strong> et vos <strong style=\"color:#f0f0f0;\">axes de développement</strong>",
+        "Recevez un profil personnalisé parmi 8 archétypes de leadership IT",
+        "Offrez au recruteur une <strong style=\"color:#f0f0f0;\">vision factuelle</strong> de votre style de management et de vos compétences clés",
+        "Bénéficiez d'un <strong style=\"color:#f0f0f0;\">debriefing individuel</strong> avec un consultant pour approfondir vos résultats",
+      ],
+    },
+    how: {
+      title: "Comment ça se passe ?",
+      text: "Vous serez confronté(e) à des <strong style=\"color:#f0f0f0;\">scénarios professionnels réalistes</strong> et devrez classer 4 options de réponse selon votre approche naturelle. Il n'y a pas de bonnes ou mauvaises réponses — le test évalue votre style de management, pas vos connaissances. <strong style=\"color:#f0f0f0;\">Durée : environ 15 à 25 minutes.</strong> Vous pouvez interrompre et reprendre le test à tout moment grâce à votre code d'accès.",
+    },
+    after: "Une fois vos résultats disponibles, une session de debriefing individuelle pourra être organisée pour approfondir votre profil, explorer vos paradoxes et définir des pistes de développement concrètes.",
+  },
+
   dimensions: [
     { id: "vision", name: "Vision Stratégique IT", pillar: 0, icon: "🔭", color: "#FECC02" },
     { id: "leadership", name: "Leadership d'Équipe", pillar: 0, icon: "👥", color: "#E5B800" },

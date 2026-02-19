@@ -553,6 +553,7 @@ export default function App() {
   const [elapsedBefore, setElapsedBefore] = useState(0);
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [newFormat, setNewFormat] = useState("court");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -576,6 +577,11 @@ export default function App() {
   const [testEmailAddr, setTestEmailAddr] = useState("");
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState("");
+  const [invitationStatus, setInvitationStatus] = useState({});
+  const [invitationEmails, setInvitationEmails] = useState({});
+  const [testInvitationAddr, setTestInvitationAddr] = useState("");
+  const [testInvitationSending, setTestInvitationSending] = useState(false);
+  const [testInvitationResult, setTestInvitationResult] = useState("");
   const [simResult, setSimResult] = useState(null);
   const [seenCompletedCodes, setSeenCompletedCodes] = useState(() => {
     try { return JSON.parse(localStorage.getItem("amarillo_seen_completed") || "[]"); } catch { return []; }
@@ -647,6 +653,76 @@ export default function App() {
     }
   };
 
+  const handleSendTestInvitation = async () => {
+    if (!testInvitationAddr.includes("@") || testInvitationSending) return;
+    setTestInvitationSending(true);
+    setTestInvitationResult("");
+    try {
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "invitation",
+          to: testInvitationAddr,
+          candidateName: "Jean Dupont (TEST)",
+          candidateRole: "DSI Groupe",
+          accessCode: "AMA-TEST",
+          assessmentLabel: adminAssessment.label,
+          invitation: adminAssessment.invitation,
+          emailConfig,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      setTestInvitationResult("✓ Email d'invitation test envoyé — vérifiez votre boîte de réception");
+    } catch (e) {
+      setTestInvitationResult("Erreur lors de l'envoi. Vérifiez la configuration Resend.");
+      console.error("Test invitation email error:", e);
+    } finally {
+      setTestInvitationSending(false);
+    }
+  };
+
+  const handleSendInvitation = async (s) => {
+    const email = invitationEmails[s.code] || s.email;
+    if (!email || !email.includes("@")) return;
+
+    setInvitationStatus(prev => ({ ...prev, [s.code]: { sending: true } }));
+
+    try {
+      // Persist email to session if not already saved
+      if (email !== s.email) {
+        const fullSession = await loadSession(s.code);
+        if (fullSession) {
+          fullSession.candidateEmail = email;
+          await saveSession(fullSession);
+        }
+      }
+
+      const assessment = getAssessment(s.assessmentType || DEFAULT_ASSESSMENT);
+      const res = await fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "invitation",
+          to: email,
+          candidateName: s.name,
+          candidateRole: s.role,
+          accessCode: s.code,
+          assessmentLabel: assessment.label,
+          invitation: assessment.invitation,
+          emailConfig,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erreur serveur");
+      setInvitationStatus(prev => ({ ...prev, [s.code]: { sent: true } }));
+      await loadSessions();
+    } catch (e) {
+      setInvitationStatus(prev => ({ ...prev, [s.code]: { error: "Erreur lors de l'envoi" } }));
+      console.error("Invitation email error:", e);
+    }
+  };
+
   const handleDeleteSession = async (code) => {
     setDeleting(true);
     const ok = await deleteSession(code);
@@ -665,7 +741,7 @@ export default function App() {
     try {
       const code = generateCode();
       const session = {
-        code, candidateName: newName, candidateRole: newRole, format: newFormat,
+        code, candidateName: newName, candidateRole: newRole, candidateEmail: newEmail || "", format: newFormat,
         assessmentType: adminAssessmentType,
         status: "pending", answers: {}, currentQ: 0, createdAt: new Date().toISOString(),
         totalTimeMs: 0, questions: selectQuestions(newFormat, adminAssessment).map((q, i) => ({ ...q, idx: i })),
@@ -676,7 +752,7 @@ export default function App() {
         setLoading(false);
         return;
       }
-      setNewName(""); setNewRole("");
+      setNewName(""); setNewRole(""); setNewEmail("");
       await loadSessions();
     } catch (e) {
       console.error("Create session error:", e);
@@ -1361,7 +1437,7 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Candidat</label>
                 <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Prénom Nom" style={input} />
@@ -1369,6 +1445,10 @@ export default function App() {
               <div>
                 <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Poste visé</label>
                 <input type="text" value={newRole} onChange={(e) => setNewRole(e.target.value)} placeholder={adminAssessment.rolePlaceholder} style={input} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Email (optionnel)</label>
+                <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="candidat@email.com" style={input} />
               </div>
             </div>
 
@@ -1483,7 +1563,28 @@ export default function App() {
               {testEmailResult && (
                 <p style={{ fontSize: 12, marginTop: 8, color: testEmailResult.startsWith("✓") ? "#52B788" : "#e74c3c" }}>{testEmailResult}</p>
               )}
-              <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Envoie un email avec des données fictives pour vérifier la mise en page.</p>
+              <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Envoie un email de résultats avec des données fictives pour vérifier la mise en page.</p>
+            </div>
+
+            {/* Test invitation email */}
+            <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 8, fontFamily: "'DM Mono', monospace" }}>
+                Tester l'email d'invitation
+              </label>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="email" value={testInvitationAddr}
+                  onChange={(e) => { setTestInvitationAddr(e.target.value); setTestInvitationResult(""); }}
+                  placeholder="votre@email.com" style={{ ...input, flex: 1, minWidth: 200 }}
+                  onKeyDown={(e) => e.key === "Enter" && testInvitationAddr.includes("@") && !testInvitationSending && handleSendTestInvitation()} />
+                <button onClick={handleSendTestInvitation} disabled={!testInvitationAddr.includes("@") || testInvitationSending}
+                  style={{ padding: "12px 20px", fontSize: 12, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: testInvitationAddr.includes("@") && !testInvitationSending ? "rgba(254,204,2,0.15)" : "rgba(255,255,255,0.03)", color: testInvitationAddr.includes("@") && !testInvitationSending ? "#FECC02" : "#555", border: `1px solid ${testInvitationAddr.includes("@") ? "#FECC0244" : "rgba(255,255,255,0.08)"}`, borderRadius: 2, cursor: testInvitationAddr.includes("@") && !testInvitationSending ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                  {testInvitationSending ? "Envoi..." : "Tester l'invitation"}
+                </button>
+              </div>
+              {testInvitationResult && (
+                <p style={{ fontSize: 12, marginTop: 8, color: testInvitationResult.startsWith("✓") ? "#52B788" : "#e74c3c" }}>{testInvitationResult}</p>
+              )}
+              <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Envoie un email d'invitation avec des données fictives pour vérifier la mise en page.</p>
             </div>
           </div>
 
@@ -1498,31 +1599,74 @@ export default function App() {
             {sessions.map((s) => {
               const statusColors = { pending: "#888", in_progress: "#FECC02", completed: "#52B788" };
               const statusLabels = { pending: "En attente", in_progress: "En cours", completed: "Terminé" };
+              const invStatus = invitationStatus[s.code] || {};
+              const currentInvEmail = invitationEmails[s.code] !== undefined ? invitationEmails[s.code] : (s.email || "");
+              const hasEmail = !!(s.email || (invitationEmails[s.code] && invitationEmails[s.code].includes("@")));
               return (
-                <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#FECC02", fontWeight: 700 }}>{s.code}</span>
-                    <span style={{ fontSize: 11, padding: "4px 10px", borderRadius: 2, background: `${statusColors[s.status]}22`, color: statusColors[s.status], fontFamily: "'DM Mono', monospace" }}>
-                      {statusLabels[s.status]}
-                    </span>
-                    {s.status === "completed" && (
-                      <button onClick={async () => { const full = await loadSession(s.code); if (full) { setCurrentSession(full); setIsAdminView(true); setView("results"); } }}
-                        style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#52B788", borderColor: "#52B78844" }}>
-                        Voir résultats
+                <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
+                      <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#FECC02", fontWeight: 700 }}>{s.code}</span>
+                      <span style={{ fontSize: 11, padding: "4px 10px", borderRadius: 2, background: `${statusColors[s.status]}22`, color: statusColors[s.status], fontFamily: "'DM Mono', monospace" }}>
+                        {statusLabels[s.status]}
+                      </span>
+                      {s.status !== "completed" && (
+                        invStatus.sent ? (
+                          <span style={{ fontSize: 11, color: "#52B788", fontFamily: "'DM Mono', monospace", padding: "4px 10px", background: "rgba(82,183,136,0.08)", borderRadius: 2 }}>✓ Invitation envoyée</span>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (s.email && s.email.includes("@")) {
+                                handleSendInvitation(s);
+                              } else {
+                                setInvitationEmails(prev => ({ ...prev, [s.code]: prev[s.code] !== undefined ? undefined : "" }));
+                              }
+                            }}
+                            disabled={invStatus.sending}
+                            style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#FECC02", borderColor: "#FECC0244" }}>
+                            {invStatus.sending ? "Envoi..." : "Envoyer l'invitation"}
+                          </button>
+                        )
+                      )}
+                      {s.status === "completed" && (
+                        <button onClick={async () => { const full = await loadSession(s.code); if (full) { setCurrentSession(full); setIsAdminView(true); setView("results"); } }}
+                          style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#52B788", borderColor: "#52B78844" }}>
+                          Voir résultats
+                        </button>
+                      )}
+                      <button onClick={() => setDeleteConfirm(s.code)}
+                        style={{ ...btnOutline, padding: "6px 10px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}
+                        title="Supprimer cette session">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
                       </button>
-                    )}
-                    <button onClick={() => setDeleteConfirm(s.code)}
-                      style={{ ...btnOutline, padding: "6px 10px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}
-                      title="Supprimer cette session">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                      </svg>
-                    </button>
+                    </div>
                   </div>
+                  {/* Inline email input when no email on session */}
+                  {invitationEmails[s.code] !== undefined && !s.email && !invStatus.sent && (
+                    <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+                      <input type="email"
+                        value={invitationEmails[s.code] || ""}
+                        onChange={(e) => setInvitationEmails(prev => ({ ...prev, [s.code]: e.target.value }))}
+                        placeholder="email du candidat"
+                        onKeyDown={(e) => e.key === "Enter" && invitationEmails[s.code]?.includes("@") && handleSendInvitation(s)}
+                        style={{ ...input, flex: 1, fontSize: 12 }} />
+                      <button
+                        onClick={() => handleSendInvitation(s)}
+                        disabled={!invitationEmails[s.code]?.includes("@") || invStatus.sending}
+                        style={{ padding: "10px 20px", fontSize: 12, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: invitationEmails[s.code]?.includes("@") && !invStatus.sending ? "rgba(254,204,2,0.15)" : "rgba(255,255,255,0.03)", color: invitationEmails[s.code]?.includes("@") && !invStatus.sending ? "#FECC02" : "#555", border: `1px solid ${invitationEmails[s.code]?.includes("@") ? "#FECC0244" : "rgba(255,255,255,0.08)"}`, borderRadius: 2, cursor: invitationEmails[s.code]?.includes("@") && !invStatus.sending ? "pointer" : "default", whiteSpace: "nowrap" }}>
+                        {invStatus.sending ? "Envoi..." : "Envoyer"}
+                      </button>
+                    </div>
+                  )}
+                  {invStatus.error && (
+                    <p style={{ color: "#e74c3c", fontSize: 12, marginTop: 8, marginBottom: 0 }}>{invStatus.error}</p>
+                  )}
                 </div>
               );
             })}

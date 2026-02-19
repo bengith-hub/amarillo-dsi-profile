@@ -80,7 +80,7 @@ export async function handler(event) {
       <!-- Greeting -->
       <p style="color:#f0f0f0; font-size:16px; margin:0 0 8px;">Bonjour ${candidateName},</p>
       <p style="color:#999; font-size:14px; line-height:1.7; margin:0 0 28px;">
-        Dans le cadre ${candidateRole ? `du poste de <strong style="color:#f0f0f0;">${candidateRole}</strong>` : "de votre accompagnement"}, nous vous invitons à compléter l'évaluation <strong style="color:#FECC02;">${assessmentLabel || "Amarillo Profile™"}</strong>.
+        Dans le cadre de votre recherche de nouveau défi, nous vous invitons à compléter l'évaluation <strong style="color:#FECC02;">${assessmentLabel || "Amarillo Profile™"}</strong>.
       </p>
 
       <!-- What is this assessment? -->
@@ -128,26 +128,21 @@ export async function handler(event) {
       </div>
       ` : ""}
 
-      <!-- Divider -->
-      <div style="border-top:1px solid rgba(255,255,255,0.06); margin-bottom:28px;"></div>
-
-      <!-- Contact block -->
-      <div style="background:rgba(254,204,2,0.04); border:1px solid rgba(254,204,2,0.1); border-radius:4px; padding:24px 28px;">
-        <div style="font-size:11px; letter-spacing:3px; color:#FECC02; text-transform:uppercase; margin-bottom:12px; font-weight:600;">Une question ? Contactez-nous</div>
-        <p style="color:#ccc; font-size:14px; line-height:1.8; margin:0;">
+      <!-- Contact block (aligned with debrief style) -->
+      <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:24px;">
+        <p style="color:#ccc; font-size:13px; line-height:1.8; margin:0;">
           <strong style="color:#f0f0f0;">${cfg.contactName}</strong><br>
-          <span style="color:#999; font-size:12px;">${cfg.contactDesc}</span><br>
-          <a href="mailto:${cfg.contactEmail}" style="color:#FECC02; text-decoration:none;">${cfg.contactEmail}</a><br>
-          <a href="${websiteHref}" style="color:#FECC02; text-decoration:none;">${cfg.contactWebsite}</a>
+          <span style="color:#999; font-size:12px;">Cabinet de search et d'approche directe spécialisé dans le recrutement de profils middle et top management pour des rôles à enjeu stratégique.</span><br>
+          <a href="mailto:${cfg.contactEmail}" style="color:#FECC02; text-decoration:none;">${cfg.contactEmail}</a>
         </p>
       </div>
 
     </div>
 
-    <!-- Footer -->
-    <div style="background:rgba(255,255,255,0.02); padding:24px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
-      <img src="${logoDarkUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.3;" />
-      <p style="color:#444; font-size:11px; margin:0;">${assessmentLabel || "Amarillo Profile™"} · ${cfg.contactName}</p>
+    <!-- Footer (aligned with debrief style) -->
+    <div style="background:rgba(255,255,255,0.02); padding:20px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
+      <img src="${logoWhiteUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.4;" />
+      <p style="color:#555; font-size:11px; margin:0;">${assessmentLabel || "Amarillo Profile™"} · Document confidentiel</p>
     </div>
 
   </div>

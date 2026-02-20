@@ -58,7 +58,7 @@ const dsi = {
 
   formats: {
     court: { label: "Court", questionsPerDim: 3, total: 42, mirrorCount: 4, desirabilityCount: 2, duration: "~17 min" },
-    standard: { label: "Standard", questionsPerDim: 4, total: 58, mirrorCount: 6, desirabilityCount: 4, duration: "~24 min" },
+    standard: { label: "Standard", questionsPerDim: 4, total: 59, mirrorCount: 7, desirabilityCount: 4, duration: "~24 min" },
   },
 
   // 8 profiles ordered by priority (first match wins)
@@ -165,6 +165,7 @@ const dsi = {
     { mirrorDim: "mirror_influence", originalDim: "influence", originalOrder: 1 },
     { mirrorDim: "mirror_budget", originalDim: "budget", originalOrder: 3 },
     { mirrorDim: "mirror_resilience", originalDim: "resilience", originalOrder: 3 },
+    { mirrorDim: "mirror_innovation", originalDim: "innovation", originalOrder: 2 },
   ],
 
   // 60 questions (5 per dimension)
@@ -626,6 +627,13 @@ const dsi = {
       { id: "b", text: "Vous signalez les risques tout en vous engageant sur un planning tendu", score: 2 },
       { id: "c", text: "Vous proposez un périmètre réduit avec des points de contrôle réguliers", score: 4 },
       { id: "d", text: "Vous recadrez les attentes et proposez une approche itérative rapide", score: 3 },
+    ]},
+    // Miroir de innovation order:2 (posture face à l'IA / technologies émergentes)
+    { dim: "mirror_innovation", mirrorOf: { dim: "innovation", order: 2 }, order: 1, text: "Le Board vous interroge sur votre positionnement face aux nouvelles technologies d'IA :", options: [
+      { id: "a", text: "Vous restez prudent et observez l'évolution du marché avant d'investir", score: 1 },
+      { id: "b", text: "Vous avez lancé des pilotes sur quelques cas d'usage prometteurs", score: 2 },
+      { id: "c", text: "Vous avez formalisé une roadmap IA avec des KPIs et une gouvernance dédiée", score: 3 },
+      { id: "d", text: "L'IA est un levier de transformation intégré à la stratégie globale de l'entreprise", score: 4 },
     ]},
   ],
 

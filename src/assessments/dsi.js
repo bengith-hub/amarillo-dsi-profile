@@ -57,7 +57,7 @@ const dsi = {
   ],
 
   formats: {
-    court: { label: "Court", questionsPerDim: 3, total: 42, mirrorCount: 4, desirabilityCount: 2, duration: "~17 min" },
+    court: { label: "Court", questionsPerDim: 3, total: 43, mirrorCount: 5, desirabilityCount: 2, duration: "~17 min" },
     standard: { label: "Standard", questionsPerDim: 4, total: 59, mirrorCount: 7, desirabilityCount: 4, duration: "~24 min" },
   },
 

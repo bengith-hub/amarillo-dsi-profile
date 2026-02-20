@@ -274,6 +274,82 @@ export async function handler(event) {
       return { statusCode: 200, body: JSON.stringify({ success: true, id: debriefData.id }) };
     }
 
+    // === ADMIN NOTIFICATION EMAIL ===
+    if (type === "admin-notification") {
+      const { accessCode, assessmentLabel, candidateRole, completionTime, totalTimeMs } = body;
+
+      const totalMinutes = totalTimeMs ? Math.round(totalTimeMs / 60000) : null;
+      const timeStr = totalMinutes ? `${totalMinutes} min` : "N/A";
+      const dateStr = completionTime
+        ? new Date(completionTime).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Paris" })
+        : "N/A";
+
+      const adminHtml = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0; padding:0; background:#0a0b0e; font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px; margin:0 auto; padding:0;">
+    <div style="background:#0a0b0e; padding:28px 40px; text-align:center; border-bottom:3px solid #52B788;">
+      <img src="${logoWhiteUrl}" alt="${cfg.contactName}" style="height:36px; margin-bottom:10px;" />
+      <div style="font-size:11px; letter-spacing:4px; color:#52B788; text-transform:uppercase; font-weight:600;">Test terminé</div>
+    </div>
+    <div style="padding:36px 40px 28px;">
+      <p style="color:#f0f0f0; font-size:16px; margin:0 0 24px;">Un candidat vient de terminer son évaluation.</p>
+      <div style="background:rgba(82,183,136,0.06); border:1px solid rgba(82,183,136,0.15); border-radius:4px; padding:24px 28px; margin-bottom:24px;">
+        <div style="margin-bottom:12px;">
+          <span style="font-size:11px; letter-spacing:2px; color:#888; text-transform:uppercase;">Candidat</span><br/>
+          <span style="font-size:18px; font-weight:600; color:#f0f0f0;">${candidateName}</span>
+        </div>
+        ${candidateRole ? `<div style="margin-bottom:12px;">
+          <span style="font-size:11px; letter-spacing:2px; color:#888; text-transform:uppercase;">Poste</span><br/>
+          <span style="font-size:14px; color:#ccc;">${candidateRole}</span>
+        </div>` : ""}
+        <div style="margin-bottom:12px;">
+          <span style="font-size:11px; letter-spacing:2px; color:#888; text-transform:uppercase;">Code session</span><br/>
+          <span style="font-family:'Courier New',monospace; font-size:20px; font-weight:700; letter-spacing:4px; color:#FECC02;">${accessCode}</span>
+        </div>
+        <div style="margin-bottom:12px;">
+          <span style="font-size:11px; letter-spacing:2px; color:#888; text-transform:uppercase;">Évaluation</span><br/>
+          <span style="font-size:13px; color:#ccc;">${assessmentLabel || "DSI Profile"}</span>
+        </div>
+        <div>
+          <span style="font-size:11px; letter-spacing:2px; color:#888; text-transform:uppercase;">Durée</span><br/>
+          <span style="font-size:13px; color:#ccc;">${timeStr}</span>
+        </div>
+      </div>
+      <div style="text-align:center; margin-bottom:24px;">
+        <a href="${siteUrl}" style="display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#FECC02,#E5B800); color:#0a0b0e; text-decoration:none; font-weight:700; font-size:13px; letter-spacing:2px; text-transform:uppercase; border-radius:4px;">Voir les résultats</a>
+      </div>
+      <p style="color:#666; font-size:12px; text-align:center;">Complétée le ${dateStr}</p>
+    </div>
+    <div style="background:rgba(255,255,255,0.02); padding:20px 40px; text-align:center; border-top:1px solid rgba(255,255,255,0.04);">
+      <img src="${logoWhiteUrl}" alt="${cfg.contactName}" style="height:20px; margin-bottom:8px; opacity:0.4;" />
+      <p style="color:#555; font-size:11px; margin:0;">${assessmentLabel || "Amarillo Profile"} · Notification admin</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const adminRes = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${RESEND_API_KEY}` },
+        body: JSON.stringify({
+          from: `${cfg.senderName} <${cfg.senderEmail}>`,
+          to: [to],
+          subject: `[Notification] ${candidateName} a terminé son ${assessmentLabel || "évaluation"} (${accessCode})`,
+          html: adminHtml,
+        }),
+      });
+
+      const adminData = await adminRes.json();
+      if (!adminRes.ok) {
+        console.error("Resend admin notification error:", adminData);
+        return { statusCode: adminRes.status, body: JSON.stringify({ error: adminData.message || "Admin notification email failed" }) };
+      }
+      return { statusCode: 200, body: JSON.stringify({ success: true, id: adminData.id }) };
+    }
+
     // === RESULTS EMAIL (default) ===
     const { profileType, globalScore, resultsCode, topStrengths, topDevelopment } = body;
 

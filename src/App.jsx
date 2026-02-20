@@ -115,6 +115,7 @@ async function saveSession(session) {
       assessmentType: session.assessmentType || DEFAULT_ASSESSMENT,
       status: session.status,
       email: session.candidateEmail || "",
+      resultsSentAt: session.resultsSentAt || "",
       createdAt: session.createdAt,
       updatedAt: new Date().toISOString()
     };
@@ -167,6 +168,7 @@ const DEFAULT_EMAIL_CONFIG = {
   contactEmail: "profiling@amarillosearch.com",
   contactWebsite: "www.amarillosearch.com",
   greeting: "Merci d'avoir complété votre évaluation DSI Profile™. Voici un récapitulatif de vos résultats. Vous trouverez ci-dessous votre profil identifié ainsi que votre score global.",
+  adminNotificationEmail: "",
 };
 
 async function loadEmailConfig() {
@@ -592,6 +594,11 @@ export default function App() {
   const currentAssessment = getAssessment(currentSession?.assessmentType || DEFAULT_ASSESSMENT);
   const adminAssessment = getAssessment(adminAssessmentType);
 
+  // Load email config on mount (needed for admin notifications on candidate completion)
+  useEffect(() => {
+    loadEmailConfig().then(cfg => { setEmailConfig(cfg); setEmailConfigDraft(cfg); });
+  }, []);
+
   useEffect(() => {
     if (view === "admin") {
       loadSessions();
@@ -778,7 +785,14 @@ export default function App() {
     const session = await loadSession(code);
     setLoading(false);
     if (!session) { setResumeError("Code introuvable. Vérifiez et réessayez."); return; }
-    if (session.status === "completed") { setCurrentSession(session); setIsAdminView(false); setView("results"); return; }
+    if (session.status === "completed") {
+      setCurrentSession(session);
+      setIsAdminView(false);
+      setEmailSent(!!session.resultsSentAt);
+      if (session.candidateEmail) setCandidateEmail(session.candidateEmail);
+      setView("results");
+      return;
+    }
     startQuiz(session);
   };
 
@@ -806,6 +820,26 @@ export default function App() {
     setCurrentSession(updated);
 
     if (nextQ % 5 === 0 || isLast) await saveSession(updated);
+
+    // Send admin notification email on completion (fire-and-forget)
+    if (isLast && emailConfig.adminNotificationEmail) {
+      const assessment = getAssessment(updated.assessmentType || DEFAULT_ASSESSMENT);
+      fetch("/.netlify/functions/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "admin-notification",
+          to: emailConfig.adminNotificationEmail,
+          candidateName: updated.candidateName,
+          candidateRole: updated.candidateRole || "",
+          accessCode: updated.code,
+          assessmentLabel: assessment.label,
+          completionTime: new Date().toISOString(),
+          totalTimeMs: updated.totalTimeMs,
+          emailConfig,
+        }),
+      }).catch(err => console.error("Admin notification error:", err));
+    }
 
     setTimeout(() => {
       if (isLast) { setIsAdminView(false); setView("results"); }
@@ -1175,12 +1209,6 @@ export default function App() {
     setEmailError("");
     setEmailSent(false);
     try {
-      // Save email to JSONBin
-      if (currentSession) {
-        const updated = { ...currentSession, candidateEmail };
-        setCurrentSession(updated);
-        await saveSession(updated);
-      }
       // Send email via Netlify Function
       const scores = computeScores();
       const analysis = getAnalysis(scores, currentAssessment);
@@ -1200,6 +1228,12 @@ export default function App() {
       });
       if (!res.ok) throw new Error("Erreur serveur");
       setEmailSent(true);
+      // Persist email + sent timestamp to JSONBin after successful send
+      if (currentSession) {
+        const updated = { ...currentSession, candidateEmail, resultsSentAt: new Date().toISOString() };
+        setCurrentSession(updated);
+        await saveSession(updated);
+      }
     } catch (e) {
       setEmailError("Erreur lors de l'envoi. Réessayez plus tard.");
       console.error("Email error:", e);
@@ -1539,12 +1573,18 @@ export default function App() {
                   <textarea value={emailConfigDraft.greeting} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, greeting: e.target.value })}
                     style={{ ...input, minHeight: 80, resize: "vertical" }} placeholder="Merci d'avoir complété votre évaluation..." />
                 </div>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 6, fontFamily: "'DM Mono', monospace" }}>Email notification admin</label>
+                  <input type="email" value={emailConfigDraft.adminNotificationEmail || ""} onChange={(e) => setEmailConfigDraft({ ...emailConfigDraft, adminNotificationEmail: e.target.value })} style={input} placeholder="admin@company.com" />
+                  <p style={{ fontSize: 11, color: "#555", marginTop: 6 }}>Recevez un email lorsqu'un candidat termine son test. Laissez vide pour désactiver.</p>
+                </div>
               </div>
             ) : (
               <div style={{ marginTop: 16, fontSize: 13, color: "#888", lineHeight: 1.8 }}>
                 <span style={{ color: "#aaa" }}>Expéditeur :</span> {emailConfig.senderName} &lt;{emailConfig.senderEmail}&gt;<br/>
                 <span style={{ color: "#aaa" }}>Contact :</span> {emailConfig.contactName} · {emailConfig.contactEmail}<br/>
                 <span style={{ color: "#aaa" }}>Site :</span> {emailConfig.contactWebsite}
+                {emailConfig.adminNotificationEmail && (<><br/><span style={{ color: "#aaa" }}>Notification admin :</span> {emailConfig.adminNotificationEmail}</>)}
               </div>
             )}
 
@@ -1607,7 +1647,14 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
                     <div>
                       <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
-                      <div style={{ fontSize: 12, color: "#666" }}>{s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}</div>
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        {s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}
+                        {s.resultsSentAt && (
+                          <span style={{ display: "inline-block", marginLeft: 8, padding: "2px 8px", fontSize: 10, fontFamily: "'DM Mono', monospace", background: "rgba(82,183,136,0.08)", border: "1px solid rgba(82,183,136,0.2)", borderRadius: 2, color: "#52B788" }}>
+                            Email envoyé {new Date(s.resultsSentAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                       <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, letterSpacing: 3, color: "#FECC02", fontWeight: 700 }}>{s.code}</span>

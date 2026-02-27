@@ -5,16 +5,17 @@
 import { getStore } from "@netlify/blobs";
 import { schedule } from "@netlify/functions";
 
-// --- Config from environment ---
+// --- Config from environment (fallback to VITE_ versions for JSONBin) ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
-const GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
-const JSONBIN_MASTER_KEY = process.env.JSONBIN_MASTER_KEY;
-const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID;
+let GOOGLE_DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
+const JSONBIN_MASTER_KEY = process.env.JSONBIN_MASTER_KEY || process.env.VITE_JSONBIN_MASTER_KEY;
+const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID || process.env.VITE_JSONBIN_BIN_ID;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const BACKUP_ALERT_EMAIL = process.env.BACKUP_ALERT_EMAIL || "";
+const BACKUP_ALERT_EMAIL = process.env.BACKUP_ALERT_EMAIL || "benjamin.fetu@amarillosearch.com";
 const MAX_SNAPSHOTS = 7;
+const DRIVE_FOLDER_NAME = "Amarillo DSI Profile — Backups";
 
 // --- Helper: retry with exponential backoff ---
 async function withRetry(fn, maxAttempts = 3) {
@@ -95,6 +96,46 @@ async function uploadToDrive(accessToken, snapshot, fileName) {
   return res.json();
 }
 
+// --- Auto-create Drive folder if none configured ---
+async function ensureDriveFolder(accessToken) {
+  if (GOOGLE_DRIVE_FOLDER_ID) return GOOGLE_DRIVE_FOLDER_ID;
+
+  // Search for existing folder by name
+  const q = encodeURIComponent(`name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      GOOGLE_DRIVE_FOLDER_ID = searchData.files[0].id;
+      console.log(`Found existing Drive folder: ${GOOGLE_DRIVE_FOLDER_ID}`);
+      return GOOGLE_DRIVE_FOLDER_ID;
+    }
+  }
+
+  // Create new folder
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: DRIVE_FOLDER_NAME,
+      mimeType: "application/vnd.google-apps.folder",
+    }),
+  });
+  if (!createRes.ok) {
+    throw new Error(`Failed to create Drive folder (${createRes.status})`);
+  }
+  const folder = await createRes.json();
+  GOOGLE_DRIVE_FOLDER_ID = folder.id;
+  console.log(`Created Drive folder: ${GOOGLE_DRIVE_FOLDER_ID}`);
+  return GOOGLE_DRIVE_FOLDER_ID;
+}
+
 // --- List files in Drive folder ---
 async function listDriveFiles(accessToken) {
   const q = encodeURIComponent(`'${GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed = false`);
@@ -163,13 +204,13 @@ async function backupHandler() {
   const startTime = Date.now();
   console.log("Scheduled backup started at", new Date().toISOString());
 
-  // Check required config
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN || !GOOGLE_DRIVE_FOLDER_ID) {
+  // Check required config (GOOGLE_DRIVE_FOLDER_ID is optional — auto-created if missing)
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
     console.log("Google Drive not configured, skipping backup.");
     await writeBackupStatus({
       last_run: new Date().toISOString(),
       result: "skipped",
-      error: "Google Drive non configure",
+      error: "Google Drive non configure (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ou GOOGLE_REFRESH_TOKEN manquant)",
     });
     return { statusCode: 200, body: JSON.stringify({ status: "skipped", reason: "Google Drive not configured" }) };
   }
@@ -185,6 +226,9 @@ async function backupHandler() {
   try {
     // 1. Get Google access token
     const accessToken = await withRetry(getAccessToken);
+
+    // 1b. Ensure Drive folder exists (auto-create if GOOGLE_DRIVE_FOLDER_ID not set)
+    await ensureDriveFolder(accessToken);
 
     // 2. Read JSONBin data
     const record = await withRetry(readJSONBin);
@@ -232,6 +276,7 @@ async function backupHandler() {
       session_count: sessionCount,
       drive_file: uploaded.id,
       drive_filename: fileName,
+      drive_folder_id: GOOGLE_DRIVE_FOLDER_ID,
       duration_ms: duration,
     });
 

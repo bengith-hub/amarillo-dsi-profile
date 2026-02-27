@@ -122,9 +122,24 @@ async function saveSession(session) {
       status: session.status,
       email: session.candidateEmail || "",
       resultsSentAt: session.resultsSentAt || "",
+      invitationSentAt: session.invitationSentAt || "",
       createdAt: session.createdAt,
       updatedAt: new Date().toISOString()
     };
+    // Enrich with profile & score when completed
+    if (session.status === "completed" && session.answers) {
+      const assmt = getAssessment(session.assessmentType || DEFAULT_ASSESSMENT);
+      const scores = {};
+      assmt.dimensions.forEach((dim) => {
+        const arr = session.answers[dim.id] || [];
+        if (arr.length === 0) { scores[dim.id] = 0; return; }
+        scores[dim.id] = arr.reduce((a, v) => a + answerScore(v), 0) / arr.length;
+      });
+      const analysis = getAnalysis(scores, assmt);
+      summary.profile = analysis.profile;
+      summary.globalScore = analysis.avgNorm;
+      summary.pillarScores = analysis.pillarScoresNorm;
+    }
     if (idx >= 0) record.index[idx] = summary;
     else record.index.push(summary);
     await updateBin(record);
@@ -762,6 +777,12 @@ export default function App() {
       });
 
       if (!res.ok) throw new Error("Erreur serveur");
+      // Persist invitationSentAt timestamp
+      const fullSession = await loadSession(s.code);
+      if (fullSession) {
+        fullSession.invitationSentAt = new Date().toISOString();
+        await saveSession(fullSession);
+      }
       setInvitationStatus(prev => ({ ...prev, [s.code]: { sent: true } }));
       await loadSessions();
     } catch (e) {
@@ -1820,13 +1841,47 @@ export default function App() {
               return (
                 <div key={s.code} style={{ padding: "16px 20px", marginBottom: 8, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>{s.name}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                        <span style={{ fontSize: 15, fontWeight: 500 }}>{s.name}</span>
+                        {s.status === "completed" && s.profile && (
+                          <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", padding: "2px 8px", background: "rgba(254,204,2,0.08)", border: "1px solid rgba(254,204,2,0.2)", borderRadius: 2, color: "#FECC02", whiteSpace: "nowrap" }}>
+                            {s.profile}
+                          </span>
+                        )}
+                        {s.status === "completed" && s.globalScore != null && (
+                          <span style={{ fontSize: 12, fontFamily: "'DM Mono', monospace", fontWeight: 700, color: s.globalScore >= 60 ? "#52B788" : s.globalScore >= 40 ? "#E8A838" : "#e74c3c" }}>
+                            {s.globalScore}/100
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 12, color: "#666" }}>
                         {s.role} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).label} · {getAssessment(s.assessmentType || DEFAULT_ASSESSMENT).formats[s.format]?.label}{s.email ? ` · ${s.email}` : ""}
+                      </div>
+                      {/* Pillar scores mini-bar for completed sessions */}
+                      {s.status === "completed" && s.pillarScores && (() => {
+                        const assmt = getAssessment(s.assessmentType || DEFAULT_ASSESSMENT);
+                        return (
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            {assmt.pillars.map((p, i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ fontSize: 9, color: p.color, textTransform: "uppercase", letterSpacing: 1 }}>{p.name}</span>
+                                <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", fontWeight: 700, color: s.pillarScores[i] >= 60 ? "#52B788" : s.pillarScores[i] >= 40 ? "#ccc" : "#e74c3c" }}>{s.pillarScores[i]}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      {/* Email history badges */}
+                      <div style={{ display: "flex", gap: 6, marginTop: s.invitationSentAt || s.resultsSentAt ? 6 : 0, flexWrap: "wrap" }}>
+                        {s.invitationSentAt && (
+                          <span style={{ display: "inline-block", padding: "2px 8px", fontSize: 10, fontFamily: "'DM Mono', monospace", background: "rgba(254,204,2,0.06)", border: "1px solid rgba(254,204,2,0.15)", borderRadius: 2, color: "#FECC02" }}>
+                            Invitation envoyée {new Date(s.invitationSentAt).toLocaleDateString("fr-FR")}
+                          </span>
+                        )}
                         {s.resultsSentAt && (
-                          <span style={{ display: "inline-block", marginLeft: 8, padding: "2px 8px", fontSize: 10, fontFamily: "'DM Mono', monospace", background: "rgba(82,183,136,0.08)", border: "1px solid rgba(82,183,136,0.2)", borderRadius: 2, color: "#52B788" }}>
-                            Email envoyé {new Date(s.resultsSentAt).toLocaleDateString("fr-FR")}
+                          <span style={{ display: "inline-block", padding: "2px 8px", fontSize: 10, fontFamily: "'DM Mono', monospace", background: "rgba(82,183,136,0.08)", border: "1px solid rgba(82,183,136,0.2)", borderRadius: 2, color: "#52B788" }}>
+                            Résultats envoyés {new Date(s.resultsSentAt).toLocaleDateString("fr-FR")}
                           </span>
                         )}
                       </div>

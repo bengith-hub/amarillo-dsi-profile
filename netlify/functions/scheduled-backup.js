@@ -1,9 +1,8 @@
 // Netlify Scheduled Function — Automatic daily backup to Google Drive
-// Runs at 3:00 AM UTC every day (cron: 0 3 * * *)
+// Runs at 3:00 AM UTC every day (configured in netlify.toml: schedule = "0 3 * * *")
 // Reads data from JSONBin, uploads to Google Drive, rotates old backups.
 
 import { getStore } from "@netlify/blobs";
-import { schedule } from "@netlify/functions";
 
 // --- Config from environment (fallback to VITE_ versions for JSONBin) ---
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -295,4 +294,7 @@ async function backupHandler() {
   }
 }
 
-export const handler = schedule("0 3 * * *", backupHandler);
+// Schedule is defined in netlify.toml: [functions."scheduled-backup"] schedule = "0 3 * * *"
+export async function handler(event) {
+  return backupHandler();
+}

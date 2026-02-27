@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import amarilloLogoWhite from "./assets/amarillo-logo-white.png";
 import amarilloLogoDark from "./assets/amarillo-logo-dark.png";
 import ASSESSMENTS, { DEFAULT_ASSESSMENT } from "./assessments";
+import {
+  loadGIS, initTokenClient, requestAccessToken,
+  downloadLocalBackup, uploadToDrive, listDriveBackups,
+  downloadFromDrive, restoreFromBackup, parseBackupFile,
+} from "./backup";
 
 // ============================================================
 // AMARILLO PROFILE™ v4
@@ -590,6 +595,22 @@ export default function App() {
   });
   const resultsRef = useRef(null);
 
+  // --- Backup state ---
+  const [backupConfig, setBackupConfig] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("amarillo_backup_config") || "{}"); } catch { return {}; }
+  });
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupError, setBackupError] = useState("");
+  const [backupSuccess, setBackupSuccess] = useState("");
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [driveBackups, setDriveBackups] = useState([]);
+  const [driveBackupsLoading, setDriveBackupsLoading] = useState(false);
+  const [backupConfigEditing, setBackupConfigEditing] = useState(false);
+  const [backupConfigDraft, setBackupConfigDraft] = useState({});
+  const restoreFileRef = useRef(null);
+
   // Get current assessment config (from session or default)
   const currentAssessment = getAssessment(currentSession?.assessmentType || DEFAULT_ASSESSMENT);
   const adminAssessment = getAssessment(adminAssessmentType);
@@ -603,6 +624,24 @@ export default function App() {
     if (view === "admin") {
       loadSessions();
       loadEmailConfig().then(cfg => { setEmailConfig(cfg); setEmailConfigDraft(cfg); });
+      // Load backup status from Netlify Blobs
+      fetch("/.netlify/functions/store?entity=_backup_status")
+        .then(r => r.ok ? r.json() : null)
+        .then(status => { if (status) setBackupStatus(status); })
+        .catch(() => {});
+      // Load backup config from server (Google Client ID)
+      fetch("/.netlify/functions/backup-status")
+        .then(r => r.ok ? r.json() : null)
+        .then(cfg => {
+          if (cfg && cfg.googleClientId) {
+            setBackupConfig(prev => {
+              const merged = { ...prev, googleClientId: cfg.googleClientId, driveFolderId: cfg.driveFolderId || prev.driveFolderId };
+              localStorage.setItem("amarillo_backup_config", JSON.stringify(merged));
+              return merged;
+            });
+          }
+        })
+        .catch(() => {});
     }
   }, [view]);
   useEffect(() => { if (view === "quiz") setStartTime(Date.now()); }, [view]);
@@ -740,6 +779,126 @@ export default function App() {
     } else {
       setAdminError("Erreur lors de la suppression. Réessayez.");
     }
+  };
+
+  // --- BACKUP HANDLERS ---
+  const handleDownloadBackup = async () => {
+    setBackupLoading(true);
+    setBackupError("");
+    setBackupSuccess("");
+    try {
+      const record = await readBin();
+      const filename = downloadLocalBackup(record);
+      setBackupSuccess(`Backup "${filename}" téléchargé.`);
+    } catch (e) {
+      setBackupError("Erreur : " + e.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleDriveBackup = async () => {
+    setBackupLoading(true);
+    setBackupError("");
+    setBackupSuccess("");
+    try {
+      if (!backupConfig.googleClientId || !backupConfig.driveFolderId) {
+        setBackupError("Configurez d'abord le Google Client ID et le Drive Folder ID.");
+        setBackupLoading(false);
+        return;
+      }
+      await loadGIS();
+      initTokenClient(backupConfig.googleClientId);
+      const token = await requestAccessToken();
+      const record = await readBin();
+      const { fileName } = await uploadToDrive(token, backupConfig.driveFolderId, record, "manual");
+      // Update backup status
+      fetch("/.netlify/functions/store?entity=_backup_status", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...backupStatus,
+          last_manual: new Date().toISOString(),
+          last_manual_result: "success",
+        }),
+      }).then(r => r.ok ? r.json() : null)
+        .then(s => { if (s) setBackupStatus(prev => ({ ...prev, last_manual: new Date().toISOString(), last_manual_result: "success" })); })
+        .catch(() => {});
+      setBackupSuccess(`"${fileName}" sauvegardé sur Google Drive.`);
+    } catch (e) {
+      setBackupError("Erreur Drive : " + e.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreFromFile = async (file) => {
+    setRestoring(true);
+    setBackupError("");
+    setBackupSuccess("");
+    try {
+      const { data, metadata } = await parseBackupFile(file);
+      // Safety: download current data before restoring
+      const currentRecord = await readBin();
+      downloadLocalBackup(currentRecord);
+      await restoreFromBackup(data, updateBin);
+      await loadSessions();
+      setBackupSuccess(`Restauration réussie (${metadata.sessionCount} sessions). Un backup des données précédentes a été téléchargé.`);
+      setRestoreModalOpen(false);
+    } catch (e) {
+      setBackupError("Erreur restauration : " + e.message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleRestoreFromDrive = async (fileId, fileName) => {
+    setRestoring(true);
+    setBackupError("");
+    setBackupSuccess("");
+    try {
+      const token = await requestAccessToken();
+      const snapshot = await downloadFromDrive(token, fileId);
+      const data = snapshot.data || snapshot;
+      // Safety: download current data before restoring
+      const currentRecord = await readBin();
+      downloadLocalBackup(currentRecord);
+      await restoreFromBackup(data, updateBin);
+      await loadSessions();
+      setBackupSuccess(`Restauration depuis "${fileName}" réussie. Un backup des données précédentes a été téléchargé.`);
+      setRestoreModalOpen(false);
+    } catch (e) {
+      setBackupError("Erreur restauration Drive : " + e.message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleLoadDriveBackups = async () => {
+    setDriveBackupsLoading(true);
+    setBackupError("");
+    try {
+      if (!backupConfig.googleClientId || !backupConfig.driveFolderId) {
+        setBackupError("Configurez d'abord le Google Client ID et le Drive Folder ID.");
+        setDriveBackupsLoading(false);
+        return;
+      }
+      await loadGIS();
+      initTokenClient(backupConfig.googleClientId);
+      const token = await requestAccessToken();
+      const files = await listDriveBackups(token, backupConfig.driveFolderId);
+      setDriveBackups(files);
+    } catch (e) {
+      setBackupError("Impossible de lister les backups Drive : " + e.message);
+    } finally {
+      setDriveBackupsLoading(false);
+    }
+  };
+
+  const saveBackupConfig = (config) => {
+    localStorage.setItem("amarillo_backup_config", JSON.stringify(config));
+    setBackupConfig(config);
+    setBackupConfigEditing(false);
   };
 
   const createSession = async () => {
@@ -1738,6 +1897,191 @@ export default function App() {
                     style={{ padding: "12px 24px", fontSize: 13, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: deleting ? "rgba(231,76,60,0.3)" : "#e74c3c", color: "#fff", border: "none", borderRadius: 2, cursor: deleting ? "default" : "pointer" }}>
                     {deleting ? "Suppression..." : "Supprimer"}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===== BACKUP & RESTORE ===== */}
+          <div style={{ ...box, padding: 32, marginTop: 40 }}>
+            <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#FECC02", marginBottom: 24 }}>Sauvegarde & Restauration</h3>
+
+            {/* Backup status banner */}
+            {backupStatus && (() => {
+              const isError = backupStatus.result === "error";
+              const lastSuccess = backupStatus.last_success ? new Date(backupStatus.last_success) : null;
+              const isStale = !lastSuccess || (Date.now() - lastSuccess.getTime()) > 48 * 60 * 60 * 1000;
+              const lastManual = backupStatus.last_manual ? new Date(backupStatus.last_manual) : null;
+              if (!isError && !isStale) {
+                return (
+                  <div style={{ padding: "12px 16px", marginBottom: 20, borderRadius: 2, background: "rgba(82,183,136,0.08)", border: "1px solid rgba(82,183,136,0.2)", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ color: "#52B788", fontSize: 14 }}>&#10003;</span>
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      Dernier backup auto : <span style={{ color: "#52B788" }}>{lastSuccess.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" })}</span>
+                      {lastManual && (<> · Manuel : {lastManual.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" })}</>)}
+                      {backupStatus.session_count != null && <> · {backupStatus.session_count} sessions</>}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div style={{ padding: "12px 16px", marginBottom: 20, borderRadius: 2, background: isError ? "rgba(231,76,60,0.08)" : "rgba(232,168,56,0.08)", border: `1px solid ${isError ? "rgba(231,76,60,0.3)" : "rgba(232,168,56,0.3)"}`, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>{isError ? "\u26A0" : "\u26A0"}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: isError ? "#e74c3c" : "#E8A838" }}>
+                      {isError ? "Echec de la dernière sauvegarde automatique" : "Aucune sauvegarde récente"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+                      {isError ? (backupStatus.error || "Erreur inconnue") : "La dernière sauvegarde automatique date de plus de 48 heures."}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Google Drive config */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", fontFamily: "'DM Mono', monospace" }}>Configuration Google Drive</label>
+                {!backupConfigEditing ? (
+                  <button onClick={() => { setBackupConfigDraft({ ...backupConfig }); setBackupConfigEditing(true); }}
+                    style={{ ...btnOutline, padding: "4px 12px", fontSize: 10 }}>Modifier</button>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setBackupConfigEditing(false)} style={{ ...btnOutline, padding: "4px 12px", fontSize: 10 }}>Annuler</button>
+                    <button onClick={() => saveBackupConfig(backupConfigDraft)}
+                      style={{ padding: "4px 12px", fontSize: 10, fontFamily: "'DM Mono', monospace", background: "#FECC02", color: "#0a0b0e", border: "none", borderRadius: 2, cursor: "pointer", fontWeight: 600 }}>
+                      Sauvegarder
+                    </button>
+                  </div>
+                )}
+              </div>
+              {backupConfigEditing ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, color: "#666", marginBottom: 4 }}>Google Client ID</label>
+                    <input type="text" value={backupConfigDraft.googleClientId || ""} onChange={(e) => setBackupConfigDraft({ ...backupConfigDraft, googleClientId: e.target.value })}
+                      style={input} placeholder="xxx.apps.googleusercontent.com" />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: 10, color: "#666", marginBottom: 4 }}>Drive Folder ID</label>
+                    <input type="text" value={backupConfigDraft.driveFolderId || ""} onChange={(e) => setBackupConfigDraft({ ...backupConfigDraft, driveFolderId: e.target.value })}
+                      style={input} placeholder="ID du dossier Google Drive" />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "#666" }}>
+                  {backupConfig.googleClientId
+                    ? <><span style={{ color: "#888" }}>Client ID :</span> {backupConfig.googleClientId.slice(0, 20)}... · <span style={{ color: "#888" }}>Dossier :</span> {backupConfig.driveFolderId ? backupConfig.driveFolderId.slice(0, 15) + "..." : <span style={{ color: "#e74c3c" }}>non configuré</span>}</>
+                    : <span style={{ color: "#555" }}>Google Drive non configuré. Cliquez sur Modifier pour configurer.</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Manual backup buttons */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+              <button onClick={handleDownloadBackup} disabled={backupLoading}
+                style={{ ...btnOutline, padding: "10px 20px", fontSize: 12, flex: 1, minWidth: 200 }}>
+                {backupLoading ? "Téléchargement..." : "Télécharger le backup (JSON)"}
+              </button>
+              <button onClick={handleDriveBackup} disabled={backupLoading || !backupConfig.googleClientId}
+                style={{ padding: "10px 20px", fontSize: 12, fontFamily: "'DM Mono', monospace", letterSpacing: 1, flex: 1, minWidth: 200,
+                  background: backupConfig.googleClientId && !backupLoading ? "rgba(254,204,2,0.12)" : "rgba(255,255,255,0.03)",
+                  color: backupConfig.googleClientId && !backupLoading ? "#FECC02" : "#555",
+                  border: `1px solid ${backupConfig.googleClientId ? "#FECC0244" : "rgba(255,255,255,0.08)"}`,
+                  borderRadius: 2, cursor: backupConfig.googleClientId && !backupLoading ? "pointer" : "default" }}>
+                {backupLoading ? "Sauvegarde..." : "Sauvegarder sur Google Drive"}
+              </button>
+            </div>
+
+            {/* Restore buttons */}
+            <div style={{ paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 12, fontFamily: "'DM Mono', monospace" }}>Restauration</label>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <input type="file" accept=".json" ref={restoreFileRef} style={{ display: "none" }}
+                  onChange={(e) => { if (e.target.files[0]) setRestoreModalOpen(true); }} />
+                <button onClick={() => restoreFileRef.current?.click()} disabled={restoring}
+                  style={{ ...btnOutline, padding: "10px 20px", fontSize: 12 }}>
+                  Restaurer depuis un fichier
+                </button>
+                <button onClick={async () => { await handleLoadDriveBackups(); setRestoreModalOpen(true); }}
+                  disabled={driveBackupsLoading || !backupConfig.googleClientId}
+                  style={{ ...btnOutline, padding: "10px 20px", fontSize: 12, color: backupConfig.googleClientId ? "#FECC02" : "#555", borderColor: backupConfig.googleClientId ? "#FECC0244" : "rgba(255,255,255,0.08)" }}>
+                  {driveBackupsLoading ? "Chargement..." : "Restaurer depuis Google Drive"}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: "#555", marginTop: 8 }}>
+                Un backup des données actuelles sera téléchargé automatiquement avant toute restauration.
+              </p>
+            </div>
+
+            {/* Feedback messages */}
+            {backupSuccess && <p style={{ fontSize: 12, marginTop: 12, color: "#52B788" }}>{backupSuccess}</p>}
+            {backupError && <p style={{ fontSize: 12, marginTop: 12, color: "#e74c3c" }}>{backupError}</p>}
+          </div>
+
+          {/* Restore modal */}
+          {restoreModalOpen && (
+            <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}
+              onClick={() => !restoring && setRestoreModalOpen(false)}>
+              <div style={{ background: "#1a1b1e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 2, padding: 32, maxWidth: 560, width: "90%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+                onClick={e => e.stopPropagation()}>
+                <h3 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 18, color: "#f0f0f0", marginBottom: 16 }}>Restaurer un backup</h3>
+
+                {/* File restore */}
+                {restoreFileRef.current?.files?.[0] && (
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>
+                      Fichier sélectionné : <span style={{ color: "#FECC02" }}>{restoreFileRef.current.files[0].name}</span>
+                    </p>
+                    <p style={{ fontSize: 12, color: "#e74c3c", lineHeight: 1.6, marginBottom: 16 }}>
+                      Cette action va remplacer TOUTES les données actuelles. Un backup sera téléchargé automatiquement avant la restauration.
+                    </p>
+                    <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                      <button onClick={() => { setRestoreModalOpen(false); restoreFileRef.current.value = ""; }} disabled={restoring} style={btnOutline}>Annuler</button>
+                      <button onClick={() => handleRestoreFromFile(restoreFileRef.current.files[0])} disabled={restoring}
+                        style={{ padding: "12px 24px", fontSize: 13, fontFamily: "'DM Mono', monospace", letterSpacing: 1, background: restoring ? "rgba(231,76,60,0.3)" : "#e74c3c", color: "#fff", border: "none", borderRadius: 2, cursor: restoring ? "default" : "pointer" }}>
+                        {restoring ? "Restauration..." : "Restaurer"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Drive backups list */}
+                {driveBackups.length > 0 && (
+                  <div>
+                    <label style={{ display: "block", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", marginBottom: 12, fontFamily: "'DM Mono', monospace" }}>
+                      Backups Google Drive ({driveBackups.length})
+                    </label>
+                    {driveBackups.map(f => (
+                      <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", marginBottom: 6, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                        <div>
+                          <div style={{ fontSize: 13, color: "#ccc" }}>{f.name}</div>
+                          <div style={{ fontSize: 11, color: "#666" }}>
+                            {f.createdTime ? new Date(f.createdTime).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" }) : ""}
+                            {f.size ? ` · ${(parseInt(f.size) / 1024).toFixed(1)} Ko` : ""}
+                          </div>
+                        </div>
+                        <button onClick={() => handleRestoreFromDrive(f.id, f.name)} disabled={restoring}
+                          style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}>
+                          {restoring ? "..." : "Restaurer"}
+                        </button>
+                      </div>
+                    ))}
+                    <p style={{ fontSize: 11, color: "#e74c3c", marginTop: 12 }}>
+                      La restauration remplacera TOUTES les données actuelles. Un backup sera téléchargé avant.
+                    </p>
+                  </div>
+                )}
+
+                {driveBackups.length === 0 && !restoreFileRef.current?.files?.[0] && (
+                  <p style={{ color: "#555", textAlign: "center", padding: 24 }}>
+                    {driveBackupsLoading ? "Chargement des backups..." : "Aucun backup trouvé sur Google Drive."}
+                  </p>
+                )}
+
+                <div style={{ marginTop: 16, textAlign: "right" }}>
+                  <button onClick={() => { setRestoreModalOpen(false); restoreFileRef.current && (restoreFileRef.current.value = ""); }} style={btnOutline}>Fermer</button>
                 </div>
               </div>
             </div>

@@ -5,3 +5,11 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Backup automatique quotidien sur Google Drive (3h UTC)
+# Variables requises dans Netlify Dashboard :
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+#   GOOGLE_DRIVE_FOLDER_ID, JSONBIN_MASTER_KEY, JSONBIN_BIN_ID
+#   BACKUP_ALERT_EMAIL (optionnel)
+[functions."scheduled-backup"]
+  schedule = "0 3 * * *"

@@ -331,11 +331,18 @@ export async function handler(event) {
 </body>
 </html>`;
 
+      // Use noreply@ to avoid same-domain blocking when from/to share the same domain
+      const toDomain = to.split("@")[1] || "";
+      const senderDomain = cfg.senderEmail.split("@")[1] || "";
+      const adminFrom = toDomain === senderDomain
+        ? `${cfg.senderName} <noreply@${senderDomain}>`
+        : `${cfg.senderName} <${cfg.senderEmail}>`;
+
       const adminRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${RESEND_API_KEY}` },
         body: JSON.stringify({
-          from: `${cfg.senderName} <${cfg.senderEmail}>`,
+          from: adminFrom,
           to: [to],
           subject: `[Notification] ${candidateName} a terminé son ${assessmentLabel || "évaluation"} (${accessCode})`,
           html: adminHtml,

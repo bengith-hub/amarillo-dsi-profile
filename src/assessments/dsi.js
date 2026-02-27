@@ -57,8 +57,8 @@ const dsi = {
   ],
 
   formats: {
-    court: { label: "Court", questionsPerDim: 3, total: 42, mirrorCount: 4, desirabilityCount: 2, duration: "~17 min" },
-    standard: { label: "Standard", questionsPerDim: 4, total: 58, mirrorCount: 6, desirabilityCount: 4, duration: "~24 min" },
+    court: { label: "Court", questionsPerDim: 3, total: 43, mirrorCount: 5, desirabilityCount: 2, duration: "~17 min" },
+    standard: { label: "Standard", questionsPerDim: 4, total: 59, mirrorCount: 7, desirabilityCount: 4, duration: "~24 min" },
   },
 
   // 8 profiles ordered by priority (first match wins)
@@ -165,6 +165,7 @@ const dsi = {
     { mirrorDim: "mirror_influence", originalDim: "influence", originalOrder: 1 },
     { mirrorDim: "mirror_budget", originalDim: "budget", originalOrder: 3 },
     { mirrorDim: "mirror_resilience", originalDim: "resilience", originalOrder: 3 },
+    { mirrorDim: "mirror_innovation", originalDim: "innovation", originalOrder: 2 },
   ],
 
   // 60 questions (5 per dimension)
@@ -447,34 +448,34 @@ const dsi = {
     // INNOVATION
     // =============================================
     { dim: "innovation", order: 1, text: "Votre veille technologique :", options: [
-      { id: "a", text: "Suivi des tendances via la presse spécialisée", score: 1 },
-      { id: "b", text: "Participation régulière à des conférences et salons", score: 2 },
-      { id: "c", text: "Processus structuré avec technology radars et POC réguliers", score: 4 },
-      { id: "d", text: "Lab d'innovation avec partenariats startups et académiques", score: 3 },
+      { id: "a", text: "Suivi des tendances via la presse spécialisée et blogs tech", score: 1 },
+      { id: "b", text: "Participation régulière à des conférences et salons pour rester informé", score: 2 },
+      { id: "c", text: "Technology radar formalisé avec POC réguliers sur les technologies clés", score: 3 },
+      { id: "d", text: "Lab d'innovation dédié avec partenariats startups, écoles et centres de recherche", score: 4 },
     ]},
     { dim: "innovation", order: 2, text: "Face à l'IA générative :", options: [
-      { id: "a", text: "Observation de ce que font les autres", score: 1 },
-      { id: "b", text: "Tests de quelques outils et évaluation des gains", score: 2 },
-      { id: "c", text: "Stratégie IA avec cas d'usage prioritaires et gouvernance", score: 4 },
-      { id: "d", text: "Repositionnement de la chaîne de valeur autour de l'IA", score: 3 },
+      { id: "a", text: "Observation prudente de ce que font les concurrents avant de se positionner", score: 1 },
+      { id: "b", text: "Expérimentation de quelques outils IA pour évaluer les gains rapides", score: 2 },
+      { id: "c", text: "Feuille de route IA structurée avec cas d'usage prioritaires et gouvernance dédiée", score: 3 },
+      { id: "d", text: "Stratégie IA transformationnelle repositionnant l'offre et les processus de l'entreprise", score: 4 },
     ]},
     { dim: "innovation", order: 3, text: "Le budget innovation dans votre DSI :", options: [
-      { id: "a", text: "Pas de budget dédié, innovation dans les projets", score: 1 },
-      { id: "b", text: "Enveloppe annuelle pour expérimentations", score: 2 },
-      { id: "c", text: "Processus d'innovation avec funnel et critères de go/no-go", score: 3 },
-      { id: "d", text: "Innovation décentralisée avec squads et intrapreneuriat", score: 4 },
+      { id: "a", text: "Pas de budget dédié, l'innovation se fait au fil des projets", score: 1 },
+      { id: "b", text: "Enveloppe annuelle pour expérimentations et POC ponctuels", score: 2 },
+      { id: "c", text: "Processus d'innovation formalisé avec funnel, critères de go/no-go et suivi du ROI", score: 3 },
+      { id: "d", text: "Budget innovation fléché par squad avec intrapreneuriat et droit à l'échec", score: 4 },
     ]},
     { dim: "innovation", order: 4, text: "Votre approche de l'innovation ouverte :", options: [
-      { id: "a", text: "Innovation principalement en interne", score: 1 },
-      { id: "b", text: "Quelques partenaires technologiques privilégiés", score: 3 },
-      { id: "c", text: "Programme de collaboration avec startups et incubateurs", score: 4 },
-      { id: "d", text: "Écosystème complet : startups, universités, clients", score: 2 },
+      { id: "a", text: "Innovation principalement en interne avec les équipes existantes", score: 1 },
+      { id: "b", text: "Quelques partenariats technologiques ciblés avec des éditeurs clés", score: 2 },
+      { id: "c", text: "Programme structuré de collaboration avec startups et incubateurs", score: 3 },
+      { id: "d", text: "Écosystème d'innovation ouvert : startups, universités, clients et fournisseurs", score: 4 },
     ]},
     { dim: "innovation", order: 5, text: "Un collaborateur propose une idée innovante mais risquée :", options: [
-      { id: "a", text: "Vous lui demandez de se concentrer sur ses priorités", score: 1 },
-      { id: "b", text: "Du temps accordé pour approfondir l'idée", score: 2 },
-      { id: "c", text: "Budget et délai pour un prototype avec critères de succès", score: 4 },
-      { id: "d", text: "Cadre encourageant ce type d'initiative dans toute la DSI", score: 3 },
+      { id: "a", text: "Vous lui demandez de se recentrer sur ses priorités opérationnelles", score: 1 },
+      { id: "b", text: "Un peu de temps libre accordé pour creuser l'idée en parallèle", score: 2 },
+      { id: "c", text: "Cadre systématique encourageant l'innovation bottom-up dans toute la DSI", score: 3 },
+      { id: "d", text: "Budget et délai dédiés pour un prototype avec critères de succès mesurables", score: 4 },
     ]},
 
     // =============================================
@@ -626,6 +627,13 @@ const dsi = {
       { id: "b", text: "Vous signalez les risques tout en vous engageant sur un planning tendu", score: 2 },
       { id: "c", text: "Vous proposez un périmètre réduit avec des points de contrôle réguliers", score: 4 },
       { id: "d", text: "Vous recadrez les attentes et proposez une approche itérative rapide", score: 3 },
+    ]},
+    // Miroir de innovation order:2 (posture face à l'IA / technologies émergentes)
+    { dim: "mirror_innovation", mirrorOf: { dim: "innovation", order: 2 }, order: 1, text: "Le Board vous interroge sur votre positionnement face aux nouvelles technologies d'IA :", options: [
+      { id: "a", text: "Vous restez prudent et observez l'évolution du marché avant d'investir", score: 1 },
+      { id: "b", text: "Vous avez lancé des pilotes sur quelques cas d'usage prometteurs", score: 2 },
+      { id: "c", text: "Vous avez formalisé une roadmap IA avec des KPIs et une gouvernance dédiée", score: 3 },
+      { id: "d", text: "L'IA est un levier de transformation intégré à la stratégie globale de l'entreprise", score: 4 },
     ]},
   ],
 

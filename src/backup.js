@@ -127,6 +127,45 @@ export function downloadLocalBackup(record) {
 // GOOGLE DRIVE
 // ============================================================
 
+const DRIVE_FOLDER_NAME = "Amarillo DSI Profile — Backups";
+
+/**
+ * Ensure a Drive folder exists. Search by name, create if missing.
+ * Returns the folder ID.
+ */
+export async function ensureDriveFolder(accessToken) {
+  // Search for existing folder
+  const q = encodeURIComponent(`name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+  const searchRes = await fetch(
+    `${DRIVE_FILES}?q=${q}&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (searchRes.ok) {
+    const data = await searchRes.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+  }
+
+  // Create new folder
+  const createRes = await fetch(DRIVE_FILES, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: DRIVE_FOLDER_NAME,
+      mimeType: "application/vnd.google-apps.folder",
+    }),
+  });
+  if (!createRes.ok) {
+    throw new Error(`Impossible de créer le dossier Drive (${createRes.status})`);
+  }
+  const folder = await createRes.json();
+  return folder.id;
+}
+
 /** Upload a snapshot to Google Drive (multipart upload) */
 export async function uploadToDrive(accessToken, folderId, record, type = "manual") {
   const snapshot = createSnapshot(record, type);

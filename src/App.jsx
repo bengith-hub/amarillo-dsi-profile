@@ -6,6 +6,7 @@ import {
   loadGIS, initTokenClient, requestAccessToken,
   downloadLocalBackup, uploadToDrive, listDriveBackups,
   downloadFromDrive, restoreFromBackup, parseBackupFile,
+  ensureDriveFolder,
 } from "./backup";
 
 // ============================================================
@@ -802,16 +803,24 @@ export default function App() {
     setBackupError("");
     setBackupSuccess("");
     try {
-      if (!backupConfig.googleClientId || !backupConfig.driveFolderId) {
-        setBackupError("Configurez d'abord le Google Client ID et le Drive Folder ID.");
+      if (!backupConfig.googleClientId) {
+        setBackupError("Configurez d'abord le Google Client ID.");
         setBackupLoading(false);
         return;
       }
       await loadGIS();
       initTokenClient(backupConfig.googleClientId);
       const token = await requestAccessToken();
+      // Auto-create Drive folder if not configured
+      let folderId = backupConfig.driveFolderId;
+      if (!folderId) {
+        folderId = await ensureDriveFolder(token);
+        const updated = { ...backupConfig, driveFolderId: folderId };
+        localStorage.setItem("amarillo_backup_config", JSON.stringify(updated));
+        setBackupConfig(updated);
+      }
       const record = await readBin();
-      const { fileName } = await uploadToDrive(token, backupConfig.driveFolderId, record, "manual");
+      const { fileName } = await uploadToDrive(token, folderId, record, "manual");
       // Update backup status
       fetch("/.netlify/functions/store?entity=_backup_status", {
         method: "PUT",
@@ -878,15 +887,22 @@ export default function App() {
     setDriveBackupsLoading(true);
     setBackupError("");
     try {
-      if (!backupConfig.googleClientId || !backupConfig.driveFolderId) {
-        setBackupError("Configurez d'abord le Google Client ID et le Drive Folder ID.");
+      if (!backupConfig.googleClientId) {
+        setBackupError("Configurez d'abord le Google Client ID.");
         setDriveBackupsLoading(false);
         return;
       }
       await loadGIS();
       initTokenClient(backupConfig.googleClientId);
       const token = await requestAccessToken();
-      const files = await listDriveBackups(token, backupConfig.driveFolderId);
+      let folderId = backupConfig.driveFolderId;
+      if (!folderId) {
+        folderId = await ensureDriveFolder(token);
+        const updated = { ...backupConfig, driveFolderId: folderId };
+        localStorage.setItem("amarillo_backup_config", JSON.stringify(updated));
+        setBackupConfig(updated);
+      }
+      const files = await listDriveBackups(token, folderId);
       setDriveBackups(files);
     } catch (e) {
       setBackupError("Impossible de lister les backups Drive : " + e.message);

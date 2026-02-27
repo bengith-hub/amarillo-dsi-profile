@@ -640,11 +640,13 @@ export default function App() {
     if (view === "admin") {
       loadSessions();
       loadEmailConfig().then(cfg => { setEmailConfig(cfg); setEmailConfigDraft(cfg); });
-      // Load backup status from Netlify Blobs
+      // Load backup status — try server first, fallback to localStorage
       fetch("/.netlify/functions/store?entity=_backup_status")
-        .then(r => r.ok ? r.json() : null)
-        .then(status => { if (status) setBackupStatus(status); })
-        .catch(() => {});
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(status => { if (status) { setBackupStatus(status); localStorage.setItem("amarillo_backup_status", JSON.stringify(status)); } })
+        .catch(() => {
+          try { const local = JSON.parse(localStorage.getItem("amarillo_backup_status")); if (local) setBackupStatus(local); } catch {}
+        });
       // Load backup config from server (Google Client ID)
       fetch("/.netlify/functions/backup-status")
         .then(r => r.ok ? r.json() : null)
@@ -842,18 +844,15 @@ export default function App() {
       }
       const record = await readBin();
       const { fileName } = await uploadToDrive(token, folderId, record, "manual");
-      // Update backup status
+      // Update backup status — server + localStorage fallback
+      const updatedStatus = { ...backupStatus, last_manual: new Date().toISOString(), last_manual_result: "success" };
+      setBackupStatus(updatedStatus);
+      localStorage.setItem("amarillo_backup_status", JSON.stringify(updatedStatus));
       fetch("/.netlify/functions/store?entity=_backup_status", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...backupStatus,
-          last_manual: new Date().toISOString(),
-          last_manual_result: "success",
-        }),
-      }).then(r => r.ok ? r.json() : null)
-        .then(s => { if (s) setBackupStatus(prev => ({ ...prev, last_manual: new Date().toISOString(), last_manual_result: "success" })); })
-        .catch(() => {});
+        body: JSON.stringify(updatedStatus),
+      }).catch(() => {});
       setBackupSuccess(`"${fileName}" sauvegardé sur Google Drive.`);
     } catch (e) {
       setBackupError("Erreur Drive : " + e.message);
@@ -1827,7 +1826,7 @@ export default function App() {
           <div style={{ ...box, padding: 32 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h3 style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", color: "#888", margin: 0 }}>Sessions ({sessions.length})</h3>
-              <button onClick={loadSessions} style={{ ...btnOutline, padding: "6px 14px", fontSize: 11 }}>Rafraîchir</button>
+              <button onClick={loadSessions} disabled={loading} style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, opacity: loading ? 0.5 : 1 }}>{loading ? "Chargement..." : "Rafraîchir"}</button>
             </div>
 
             {sessions.length === 0 && <p style={{ color: "#555", textAlign: "center", padding: 24 }}>Aucune session créée</p>}
@@ -2809,7 +2808,11 @@ export default function App() {
                     📋 PDF Dirigeant (anonyme)
                   </button>
                 )}
-                <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
+                {isAdminView ? (
+                  <button onClick={() => { setCurrentSession(null); setIsAdminView(false); setView("admin"); }} style={btnOutline}>← Retour admin</button>
+                ) : (
+                  <button onClick={() => { setCurrentSession(null); setView("landing"); }} style={btnOutline}>← Retour à l'accueil</button>
+                )}
               </div>
             </div>
           </div>

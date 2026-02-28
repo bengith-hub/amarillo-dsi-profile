@@ -105,7 +105,19 @@ async function ensureDriveFolder(accessToken) {
     `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  if (searchRes.ok) {
+  if (!searchRes.ok) {
+    const searchBody = await searchRes.text().catch(() => "");
+    console.error(`Drive folder search failed (${searchRes.status}): ${searchBody}`);
+    // If it's an auth error (401/403), throw immediately — no point trying to create
+    if (searchRes.status === 401 || searchRes.status === 403) {
+      throw new Error(
+        `Drive API access denied (${searchRes.status}). Le refresh token a probablement expire. ` +
+        `Pour les apps Google en mode "test", les tokens expirent apres 7 jours. ` +
+        `Regenerez le GOOGLE_REFRESH_TOKEN ou passez l'app en mode "production" dans la Google Cloud Console. ` +
+        `Detail: ${searchBody}`
+      );
+    }
+  } else {
     const searchData = await searchRes.json();
     if (searchData.files && searchData.files.length > 0) {
       GOOGLE_DRIVE_FOLDER_ID = searchData.files[0].id;
@@ -127,7 +139,17 @@ async function ensureDriveFolder(accessToken) {
     }),
   });
   if (!createRes.ok) {
-    throw new Error(`Failed to create Drive folder (${createRes.status})`);
+    const createBody = await createRes.text().catch(() => "");
+    console.error(`Drive folder creation failed (${createRes.status}): ${createBody}`);
+    if (createRes.status === 401 || createRes.status === 403) {
+      throw new Error(
+        `Drive API access denied (${createRes.status}). Le refresh token a probablement expire. ` +
+        `Pour les apps Google en mode "test", les tokens expirent apres 7 jours. ` +
+        `Regenerez le GOOGLE_REFRESH_TOKEN ou passez l'app en mode "production" dans la Google Cloud Console. ` +
+        `Detail: ${createBody}`
+      );
+    }
+    throw new Error(`Failed to create Drive folder (${createRes.status}): ${createBody}`);
   }
   const folder = await createRes.json();
   GOOGLE_DRIVE_FOLDER_ID = folder.id;

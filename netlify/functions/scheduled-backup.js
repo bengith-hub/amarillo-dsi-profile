@@ -47,6 +47,9 @@ async function getAccessToken() {
     throw new Error(`Google token exchange failed (${res.status}): ${txt}`);
   }
   const data = await res.json();
+  if (data.scope && !data.scope.includes("drive")) {
+    console.warn(`Access token scope missing 'drive': ${data.scope}`);
+  }
   return data.access_token;
 }
 
@@ -99,13 +102,30 @@ async function uploadToDrive(accessToken, snapshot, fileName) {
 async function ensureDriveFolder(accessToken) {
   if (GOOGLE_DRIVE_FOLDER_ID) return GOOGLE_DRIVE_FOLDER_ID;
 
+  // Check Netlify Blobs for a previously saved folder ID (survives cold starts)
+  try {
+    const store = getStore("dsi-profile-data");
+    const status = await store.get("_backup_status", { type: "json" });
+    if (status && status.drive_folder_id) {
+      GOOGLE_DRIVE_FOLDER_ID = status.drive_folder_id;
+      console.log(`Restored Drive folder ID from Blobs: ${GOOGLE_DRIVE_FOLDER_ID}`);
+      return GOOGLE_DRIVE_FOLDER_ID;
+    }
+  } catch (blobErr) {
+    console.warn("Could not read folder ID from Blobs:", blobErr.message);
+  }
+
   // Search for existing folder by name
   const q = encodeURIComponent(`name = '${DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
   const searchRes = await fetch(
     `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  if (searchRes.ok) {
+  if (!searchRes.ok) {
+    const searchErrBody = await searchRes.text().catch(() => "");
+    console.error(`Drive folder search failed (${searchRes.status}): ${searchErrBody}`);
+    // Fall through to attempt folder creation
+  } else {
     const searchData = await searchRes.json();
     if (searchData.files && searchData.files.length > 0) {
       GOOGLE_DRIVE_FOLDER_ID = searchData.files[0].id;
@@ -127,7 +147,8 @@ async function ensureDriveFolder(accessToken) {
     }),
   });
   if (!createRes.ok) {
-    throw new Error(`Failed to create Drive folder (${createRes.status})`);
+    const createErrBody = await createRes.text().catch(() => "");
+    throw new Error(`Failed to create Drive folder (${createRes.status}): ${createErrBody}`);
   }
   const folder = await createRes.json();
   GOOGLE_DRIVE_FOLDER_ID = folder.id;
@@ -227,7 +248,7 @@ async function backupHandler() {
     const accessToken = await withRetry(getAccessToken);
 
     // 1b. Ensure Drive folder exists (auto-create if GOOGLE_DRIVE_FOLDER_ID not set)
-    await ensureDriveFolder(accessToken);
+    await withRetry(() => ensureDriveFolder(accessToken));
 
     // 2. Read JSONBin data
     const record = await withRetry(readJSONBin);
@@ -284,12 +305,15 @@ async function backupHandler() {
 
   } catch (err) {
     console.error("Backup failed:", err);
+    const errorDetail = err.message.includes("403")
+      ? `${err.message}\n\n--- Cause probable ---\nSi l'ecran de consentement OAuth du projet Google Cloud est en mode "Testing", les refresh tokens expirent apres 7 jours. Regenerez le refresh token via OAuth Playground et mettez a jour GOOGLE_REFRESH_TOKEN dans les variables d'environnement Netlify.`
+      : err.message;
     await writeBackupStatus({
       last_run: new Date().toISOString(),
       result: "error",
-      error: err.message,
+      error: errorDetail,
     });
-    await sendAlertEmail(err.message);
+    await sendAlertEmail(errorDetail);
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 }

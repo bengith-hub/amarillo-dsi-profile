@@ -623,6 +623,7 @@ export default function App() {
   const [restoring, setRestoring] = useState(false);
   const [driveBackups, setDriveBackups] = useState([]);
   const [driveBackupsLoading, setDriveBackupsLoading] = useState(false);
+  const [backupListVisible, setBackupListVisible] = useState(false);
   const [backupConfigEditing, setBackupConfigEditing] = useState(false);
   const [backupConfigDraft, setBackupConfigDraft] = useState({});
   const restoreFileRef = useRef(null);
@@ -1988,6 +1989,7 @@ export default function App() {
                     <span style={{ color: "#52B788", fontSize: 14 }}>&#10003;</span>
                     <div style={{ fontSize: 12, color: "#888" }}>
                       Dernier backup auto : <span style={{ color: "#52B788" }}>{lastSuccess.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" })}</span>
+                      {backupStatus.drive_filename && <> — <span style={{ color: "#aaa" }}>{backupStatus.drive_filename}</span></>}
                       {lastManual && (<> · Manuel : {lastManual.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" })}</>)}
                       {backupStatus.session_count != null && <> · {backupStatus.session_count} sessions</>}
                     </div>
@@ -2062,7 +2064,77 @@ export default function App() {
                   borderRadius: 2, cursor: backupConfig.googleClientId && !backupLoading ? "pointer" : "default" }}>
                 {backupLoading ? "Sauvegarde..." : "Sauvegarder sur Google Drive"}
               </button>
+              <button onClick={async () => { await handleLoadDriveBackups(); setBackupListVisible(true); }}
+                disabled={driveBackupsLoading || !backupConfig.googleClientId}
+                style={{ ...btnOutline, padding: "10px 20px", fontSize: 12,
+                  color: backupConfig.googleClientId ? "#52B788" : "#555",
+                  borderColor: backupConfig.googleClientId ? "rgba(82,183,136,0.3)" : "rgba(255,255,255,0.08)" }}>
+                {driveBackupsLoading ? "Chargement..." : "Voir les backups"}
+              </button>
             </div>
+
+            {/* Backup history list */}
+            {backupListVisible && (
+              <div style={{ marginBottom: 16, padding: 20, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <label style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#888", fontFamily: "'DM Mono', monospace" }}>
+                    Backups Google Drive ({driveBackups.length})
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={handleLoadDriveBackups} disabled={driveBackupsLoading}
+                      style={{ ...btnOutline, padding: "4px 12px", fontSize: 10 }}>
+                      {driveBackupsLoading ? "..." : "Rafraîchir"}
+                    </button>
+                    <button onClick={() => setBackupListVisible(false)}
+                      style={{ ...btnOutline, padding: "4px 12px", fontSize: 10 }}>
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+                {driveBackups.length === 0 ? (
+                  <p style={{ color: "#555", fontSize: 12, textAlign: "center", padding: 16 }}>
+                    Aucun backup trouvé sur Google Drive.
+                  </p>
+                ) : (
+                  driveBackups.map((f, i) => {
+                    const isSnapshot = f.name && f.name.startsWith("amarillo-snapshot-");
+                    const isManual = f.name && f.name.startsWith("dsi-profile-backup-");
+                    const date = f.createdTime ? new Date(f.createdTime) : null;
+                    return (
+                      <div key={f.id} style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        padding: "10px 14px", marginBottom: i < driveBackups.length - 1 ? 6 : 0,
+                        background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 2
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontSize: 14 }}>{isSnapshot ? "\uD83D\uDDC2" : "\uD83D\uDCBE"}</span>
+                          <div>
+                            <div style={{ fontSize: 13, color: "#ccc" }}>
+                              {date ? date.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Paris" }) : f.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#666", display: "flex", gap: 8, marginTop: 2 }}>
+                              <span style={{
+                                padding: "1px 6px", borderRadius: 2, fontSize: 10,
+                                background: isSnapshot ? "rgba(82,183,136,0.1)" : "rgba(254,204,2,0.1)",
+                                color: isSnapshot ? "#52B788" : "#FECC02",
+                                border: `1px solid ${isSnapshot ? "rgba(82,183,136,0.2)" : "rgba(254,204,2,0.2)"}`
+                              }}>
+                                {isSnapshot ? "auto" : isManual ? "manuel" : "backup"}
+                              </span>
+                              {f.size && <span>{(parseInt(f.size) / 1024).toFixed(1)} Ko</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <button onClick={() => handleRestoreFromDrive(f.id, f.name)} disabled={restoring}
+                          style={{ ...btnOutline, padding: "6px 14px", fontSize: 11, color: "#e74c3c", borderColor: "rgba(231,76,60,0.3)" }}>
+                          {restoring ? "..." : "Restaurer"}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
 
             {/* Restore buttons */}
             <div style={{ paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
